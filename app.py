@@ -414,19 +414,33 @@ def display_query_results(query: str, params: tuple = ()):
         st.error("Unexpected query result format")
 
 def render_user_view():
-    st.header(f"Личный кабинет: {st.session_state.company}")
+    st.title(f"🏠 Личный кабинет: {st.session_state.company}")
     
-    # Show system status
+    # Sidebar navigation
+    st.sidebar.title("Навигация")
+    page = st.sidebar.selectbox(
+        "Выберите раздел:",
+        [
+            "📊 Стандартные отчеты",
+            "📝 Пользовательский запрос", 
+            "🤖 Умный помощник",
+            "❓ Помощь"
+        ],
+        key="client_navigation"
+    )
+    
+    # System status in sidebar
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📊 Статус системы")
+    
     if st.session_state.get('rag_initialized'):
         st.sidebar.success("✅ RAG система активна")
     else:
         st.sidebar.warning("⚠️ RAG система недоступна")
     
-    # Show KB status
     if st.session_state.get('kb_loaded_count', 0) > 0:
         st.sidebar.success(f"📚 Загружено БЗ: {st.session_state.kb_loaded_count}")
         
-        # Show detailed KB info
         if st.session_state.get('loaded_kbs_info'):
             with st.sidebar.expander("📋 Детали БЗ"):
                 for kb in st.session_state.loaded_kbs_info:
@@ -435,12 +449,256 @@ def render_user_view():
     else:
         st.sidebar.info("📚 Базы знаний не загружены")
     
-    # Add documentation assistant to sidebar
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("🤖 Умный помощник")
+    # Main content area based on selected page
+    if page == "📊 Стандартные отчеты":
+        render_standard_reports()
+    elif page == "📝 Пользовательский запрос":
+        render_custom_query()
+    elif page == "🤖 Умный помощник":
+        render_smart_assistant()
+    elif page == "❓ Помощь":
+        render_help()
+
+def render_standard_reports():
+    st.subheader("📊 Стандартные отчеты")
+    st.write("Выберите готовый отчет из списка ниже:")
+    
+    # Use session_state for report type
+    report_type = st.selectbox(
+        "Тип отчета:",
+        [
+            "Текущий договор",
+            "Список устройств",
+            "Трафик за неделю",
+            "Трафик за месяц",
+            "Статистика по типам устройств",
+            "Дни максимальной нагрузки"
+        ],
+        index=["Текущий договор", "Список устройств", "Трафик за неделю", 
+               "Трафик за месяц", "Статистика по типам устройств", "Дни максимальной нагрузки"].index(st.session_state.current_report_type),
+        key="report_type"
+    )
+    
+    # Update session_state when report type changes
+    if report_type != st.session_state.current_report_type:
+        st.session_state.current_report_type = report_type
+    
+    if st.button("Показать отчет", key="show_report"):
+        with st.spinner("Загрузка отчета..."):
+            if report_type == "Текущий договор":
+                query = """
+                SELECT 
+                    a.plan_type as plan,
+                    a.monthly_fee as fee,
+                    a.start_date as start_date,
+                    a.end_date as end_date,
+                    a.status as status
+                FROM agreements a
+                JOIN users u ON a.user_id = u.id
+                WHERE u.company = ?
+                    AND date('now') BETWEEN date(a.start_date) AND date(a.end_date)
+                    AND a.status = 'active'
+                """
+            elif report_type == "Список устройств":
+                query = """
+                SELECT 
+                    d.imei as device_id,
+                    d.device_type as type,
+                    d.model as model,
+                    d.activated_at as activation_date
+                FROM devices d
+                JOIN users u ON d.user_id = u.id
+                WHERE u.company = ?
+                ORDER BY d.activated_at DESC
+                """
+            elif report_type == "Трафик за неделю":
+                query = """
+                SELECT 
+                    date(b.billing_date) as date,
+                    ROUND(CAST(SUM(b.traffic_bytes) AS FLOAT) / (1024.0 * 1024.0 * 1024.0), 2) as traffic_gb,
+                    COUNT(DISTINCT b.imei) as active_devices,
+                    ROUND(SUM(b.amount), 2) as total_amount
+                FROM billing_records b
+                JOIN devices d ON b.imei = d.imei
+                JOIN users u ON d.user_id = u.id
+                WHERE u.company = ?
+                    AND date(b.billing_date) >= date('now', '-7 days')
+                GROUP BY date(b.billing_date)
+                ORDER BY date DESC
+                """
+            elif report_type == "Трафик за месяц":
+                query = """
+                SELECT 
+                    date(b.billing_date) as date,
+                    ROUND(CAST(SUM(b.traffic_bytes) AS FLOAT) / (1024.0 * 1024.0 * 1024.0), 2) as traffic_gb,
+                    COUNT(DISTINCT b.imei) as active_devices,
+                    ROUND(SUM(b.amount), 2) as total_amount
+                FROM billing_records b
+                JOIN devices d ON b.imei = d.imei
+                JOIN users u ON d.user_id = u.id
+                WHERE u.company = ?
+                    AND date(b.billing_date) >= date('now', '-30 days')
+                GROUP BY date(b.billing_date)
+                ORDER BY date DESC
+                """
+            elif report_type == "Статистика по типам устройств":
+                query = """
+                SELECT 
+                    d.device_type as type,
+                    COUNT(*) as count,
+                    MIN(d.activated_at) as first_activation,
+                    MAX(d.activated_at) as last_activation
+                FROM devices d
+                JOIN users u ON d.user_id = u.id
+                WHERE u.company = ?
+                GROUP BY d.device_type
+                """
+            elif report_type == "Дни максимальной нагрузки":
+                query = """
+                SELECT 
+                    date(b.billing_date) as date,
+                    ROUND(CAST(SUM(b.traffic_bytes) AS FLOAT) / (1024.0 * 1024.0 * 1024.0), 2) as traffic_gb,
+                    COUNT(DISTINCT b.imei) as active_devices,
+                    ROUND(SUM(b.amount), 2) as total_amount
+                FROM billing_records b
+                JOIN devices d ON b.imei = d.imei
+                JOIN users u ON d.user_id = u.id
+                WHERE u.company = ?
+                    AND date(b.billing_date) >= date('now', '-30 days')
+                GROUP BY date(b.billing_date)
+                ORDER BY traffic_gb DESC
+                LIMIT 5
+                """
+            
+            # Store results in session_state
+            results = execute_query(query, params=(st.session_state.company,))
+            st.session_state.current_query_results = results
+            st.session_state.current_sql_query = query
+            st.session_state.current_query_explanation = f"Результаты отчета: {report_type}"
+    
+    # Display stored results if available
+    if st.session_state.current_query_results:
+        df, error = st.session_state.current_query_results
+        if error:
+            st.error(f"Ошибка выполнения запроса: {error}")
+        else:
+            st.markdown("#### Результаты отчета")
+            st.dataframe(df)
+            
+            # Download option
+            if not df.empty:
+                csv = df.to_csv(index=False)
+                st.download_button(
+                    label="Скачать результаты как CSV",
+                    data=csv,
+                    file_name=f"report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv"
+                )
+def render_custom_query():
+    st.subheader("📝 Пользовательский запрос")
+    st.write("Задайте вопрос на русском языке, и система создаст SQL-запрос для анализа ваших данных.")
+    
+    # Show example questions
+    with st.expander("💡 Примеры вопросов"):
+        st.markdown("""
+        **📊 Аналитика:**
+        - Покажи статистику трафика за последний месяц
+        - Какие устройства потребляют больше всего трафика?
+        - Сколько у меня активных соглашений?
+        
+        **🔧 Технические:**
+        - Какие требования к антенне для спутниковой связи?
+        - Как настроить GPS трекинг?
+        - Какие параметры конфигурации нужны?
+        
+        **📋 Документы:**
+        - Покажи технические регламенты
+        - Какие стандарты безопасности?
+        - Процедуры настройки оборудования
+        """)
+    
+    # Use session_state for user question
+    user_question = st.text_area(
+        "💬 Задайте ваш вопрос:",
+        value=st.session_state.current_user_question,
+        placeholder="Например: Покажи статистику трафика за последнюю неделю",
+        height=100,
+        key="user_question"
+    )
+    
+    # Update session_state when question changes
+    if user_question != st.session_state.current_user_question:
+        st.session_state.current_user_question = user_question
+    
+    if st.button("Создать запрос", key="create_query"):
+        if user_question:
+            with st.spinner("Генерирую запрос..."):
+                # Try to use multi-KB RAG first for enhanced context
+                if st.session_state.get('multi_rag') and st.session_state.multi_rag.get_available_kbs():
+                    # Use multi-KB RAG for enhanced context
+                    kb_response = st.session_state.multi_rag.get_response_with_context(
+                        user_question, context_limit=3
+                    )
+                    
+                    # Show KB context if available
+                    if kb_response and "Не найдено релевантной информации" not in kb_response:
+                        st.markdown("#### 📚 Контекст из базы знаний")
+                        st.info(kb_response)
+                        st.markdown("---")
+                
+                # Generate SQL query
+                query, explanation = st.session_state.rag_helper.get_query_suggestion(
+                    user_question, st.session_state.company
+                )
+                if query:
+                    # Store results in session_state
+                    st.session_state.current_sql_query = query
+                    st.session_state.current_query_explanation = explanation
+                    st.session_state.current_query_results = execute_query(query)
+                    
+                    st.markdown("#### Объяснение запроса")
+                    st.info(explanation)
+                    st.markdown("#### SQL Запрос")
+                    st.code(query, language="sql")
+                    st.markdown("#### Результаты")
+                    display_query_results(query)
+                else:
+                    st.error("Не удалось сгенерировать запрос. Попробуйте переформулировать вопрос.")
+        else:
+            st.warning("Пожалуйста, введите ваш вопрос.")
+    
+    # Display stored results if available
+    if st.session_state.current_query_explanation and st.session_state.current_sql_query:
+        st.markdown("#### Последний запрос")
+        st.markdown("**Объяснение запроса**")
+        st.info(st.session_state.current_query_explanation)
+        st.markdown("**SQL Запрос**")
+        st.code(st.session_state.current_sql_query, language="sql")
+        
+        if st.session_state.current_query_results:
+            df, error = st.session_state.current_query_results
+            if error:
+                st.error(f"Ошибка выполнения запроса: {error}")
+            else:
+                st.markdown("**Результаты**")
+                st.dataframe(df)
+                
+                # Download option
+                if not df.empty:
+                    csv = df.to_csv(index=False)
+                    st.download_button(
+                        label="Скачать результаты как CSV",
+                        data=csv,
+                        file_name=f"query_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv"
+                    )
+
+def render_smart_assistant():
+    st.subheader("🤖 Умный помощник")
+    st.write("Задайте вопрос по документации, техническим требованиям или работе с системой.")
     
     # Show what the assistant can help with
-    with st.sidebar.expander("💡 Что я могу помочь?"):
+    with st.expander("💡 Что я могу помочь?"):
         st.markdown("""
         **📚 По документации:**
         - Технические требования
@@ -456,41 +714,43 @@ def render_user_view():
         """)
         
         # Quick question generator
-        if st.button("🎯 Сгенерировать вопрос", key="sidebar_question_gen"):
+        if st.button("🎯 Сгенерировать вопрос", key="question_gen"):
             quick_question = _generate_quick_question()
             st.session_state.assistant_question = quick_question
     
     # Controls for retrieval
-    k_sources = st.sidebar.slider("Количество фрагментов (K)", 1, 8, 3, 1)
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        k_sources = st.slider("Количество фрагментов (K)", 1, 8, 3, 1)
+    
+    with col2:
+        if st.button("♻️ Переформулировать", key="rephrase_question"):
+            if st.session_state.assistant_question and st.session_state.get('rag_helper'):
+                try:
+                    rephrased = st.session_state.rag_helper.get_response(
+                        f"Переформулируй вопрос кратко и однозначно: {st.session_state.assistant_question}. Верни только текст вопроса." 
+                    )
+                    if rephrased:
+                        st.session_state.assistant_question = rephrased.strip()
+                        st.session_state.assistant_answer = ""
+                except Exception:
+                    pass
 
     # Use session_state for assistant question
-    doc_question = st.sidebar.text_area(
+    doc_question = st.text_area(
         "Задайте вопрос:",
         value=st.session_state.assistant_question,
         placeholder="Например: какие требования к антенне?",
         key="doc_question"
     )
     
-    # Rephrase button
-    if st.sidebar.button("♻️ Переформулировать", key="rephrase_question"):
-        if doc_question and st.session_state.get('rag_helper'):
-            try:
-                rephrased = st.session_state.rag_helper.get_response(
-                    f"Переформулируй вопрос кратко и однозначно: {doc_question}. Верни только текст вопроса." 
-                )
-                if rephrased:
-                    st.session_state.assistant_question = rephrased.strip()
-                    st.session_state.assistant_answer = ""
-                    doc_question = st.session_state.assistant_question
-            except Exception:
-                pass
-
     # Update session_state when question changes
     if doc_question != st.session_state.assistant_question:
         st.session_state.assistant_question = doc_question
         st.session_state.assistant_answer = ""  # Clear previous answer
     
-    if st.sidebar.button("Получить ответ", key="get_doc_answer"):
+    if st.button("Получить ответ", key="get_doc_answer"):
         if doc_question:
             # Try multi-KB RAG first
             if st.session_state.get('multi_rag') and st.session_state.multi_rag.get_available_kbs():
@@ -501,14 +761,15 @@ def render_user_view():
                     docs = []
 
                 if docs:
-                    st.sidebar.markdown("**Источники:**")
+                    st.markdown("#### 📚 Источники:")
                     for i, d in enumerate(docs, 1):
                         title = d.metadata.get('title', 'Документ')
                         kb_name = d.metadata.get('kb_name', '')
                         search_type = d.metadata.get('search_type', 'vector_search')
                         preview = d.page_content[:200].replace("\n", " ") + ("…" if len(d.page_content) > 200 else "")
-                        st.sidebar.write(f"{i}. {title} — {kb_name} ({search_type})")
-                        st.sidebar.caption(preview)
+                        st.write(f"**{i}. {title}** — {kb_name} ({search_type})")
+                        st.caption(preview)
+                    st.markdown("---")
 
                 answer = st.session_state.multi_rag.get_response_with_context(doc_question, context_limit=k_sources)
                 if answer and "Не найдено релевантной информации" not in answer:
@@ -527,292 +788,46 @@ def render_user_view():
             else:
                 st.session_state.assistant_answer = "Система помощи недоступна."
         else:
-            st.sidebar.warning("Пожалуйста, введите ваш вопрос.")
+            st.warning("Пожалуйста, введите ваш вопрос.")
     
     # Display assistant answer if available
     if st.session_state.assistant_answer:
-        st.sidebar.markdown("**Ответ:**")
-        st.sidebar.markdown(st.session_state.assistant_answer)
+        st.markdown("#### 💬 Ответ:")
+        st.markdown(st.session_state.assistant_answer)
+
+def render_help():
+    st.subheader("❓ Помощь")
+    st.markdown("""
+    ### Как пользоваться личным кабинетом
     
-    # Create tabs for different features
-    tab1, tab2, tab3 = st.tabs(["📊 Стандартные отчеты", "📝 Пользовательский запрос", "❓ Помощь"])
+    #### 1. Стандартные отчеты
+    - Выберите готовый отчет из списка
+    - Нажмите "Показать отчет"
+    - Результаты можно скачать в формате CSV
     
-    with tab1:
-        st.subheader("Выберите готовый отчет")
-        
-        # Use session_state for report type
-        report_type = st.selectbox(
-            "Тип отчета:",
-            [
-                "Текущий договор",
-                "Список устройств",
-                "Трафик за неделю",
-                "Трафик за месяц",
-                "Статистика по типам устройств",
-                "Дни максимальной нагрузки"
-            ],
-            index=["Текущий договор", "Список устройств", "Трафик за неделю", 
-                   "Трафик за месяц", "Статистика по типам устройств", "Дни максимальной нагрузки"].index(st.session_state.current_report_type),
-            key="report_type"
-        )
-        
-        # Update session_state when report type changes
-        if report_type != st.session_state.current_report_type:
-            st.session_state.current_report_type = report_type
-        
-        if st.button("Показать отчет"):
-            with st.spinner("Загрузка отчета..."):
-                if report_type == "Текущий договор":
-                    query = """
-                    SELECT 
-                        a.plan_type as plan,
-                        a.monthly_fee as fee,
-                        a.start_date as start_date,
-                        a.end_date as end_date,
-                        a.status as status
-                    FROM agreements a
-                    JOIN users u ON a.user_id = u.id
-                    WHERE u.company = ?
-                        AND date('now') BETWEEN date(a.start_date) AND date(a.end_date)
-                        AND a.status = 'active'
-                    """
-                elif report_type == "Список устройств":
-                    query = """
-                    SELECT 
-                        d.imei as device_id,
-                        d.device_type as type,
-                        d.model as model,
-                        d.activated_at as activation_date
-                    FROM devices d
-                    JOIN users u ON d.user_id = u.id
-                    WHERE u.company = ?
-                    ORDER BY d.activated_at DESC
-                    """
-                elif report_type == "Трафик за неделю":
-                    query = """
-                    SELECT 
-                        date(b.billing_date) as date,
-                        ROUND(CAST(SUM(b.traffic_bytes) AS FLOAT) / (1024.0 * 1024.0 * 1024.0), 2) as traffic_gb,
-                        COUNT(DISTINCT b.imei) as active_devices,
-                        ROUND(SUM(b.amount), 2) as total_amount
-                    FROM billing_records b
-                    JOIN devices d ON b.imei = d.imei
-                    JOIN users u ON d.user_id = u.id
-                    WHERE u.company = ?
-                        AND date(b.billing_date) >= date('now', '-7 days')
-                    GROUP BY date(b.billing_date)
-                    ORDER BY date DESC
-                    """
-                elif report_type == "Трафик за месяц":
-                    query = """
-                    SELECT 
-                        date(b.billing_date) as date,
-                        ROUND(CAST(SUM(b.traffic_bytes) AS FLOAT) / (1024.0 * 1024.0 * 1024.0), 2) as traffic_gb,
-                        COUNT(DISTINCT b.imei) as active_devices,
-                        ROUND(SUM(b.amount), 2) as total_amount
-                    FROM billing_records b
-                    JOIN devices d ON b.imei = d.imei
-                    JOIN users u ON d.user_id = u.id
-                    WHERE u.company = ?
-                        AND date(b.billing_date) >= date('now', '-30 days')
-                    GROUP BY date(b.billing_date)
-                    ORDER BY date DESC
-                    """
-                elif report_type == "Статистика по типам устройств":
-                    query = """
-                    SELECT 
-                        d.device_type as type,
-                        COUNT(*) as count,
-                        MIN(d.activated_at) as first_activation,
-                        MAX(d.activated_at) as last_activation
-                    FROM devices d
-                    JOIN users u ON d.user_id = u.id
-                    WHERE u.company = ?
-                    GROUP BY d.device_type
-                    """
-                elif report_type == "Дни максимальной нагрузки":
-                    query = """
-                    SELECT 
-                        date(b.billing_date) as date,
-                        ROUND(CAST(SUM(b.traffic_bytes) AS FLOAT) / (1024.0 * 1024.0 * 1024.0), 2) as traffic_gb,
-                        COUNT(DISTINCT b.imei) as active_devices,
-                        ROUND(SUM(b.amount), 2) as total_amount
-                    FROM billing_records b
-                    JOIN devices d ON b.imei = d.imei
-                    JOIN users u ON d.user_id = u.id
-                    WHERE u.company = ?
-                        AND date(b.billing_date) >= date('now', '-30 days')
-                    GROUP BY date(b.billing_date)
-                    ORDER BY traffic_gb DESC
-                    LIMIT 5
-                    """
-                
-                # Store results in session_state
-                results = execute_query(query, params=(st.session_state.company,))
-                st.session_state.current_query_results = results
-                st.session_state.current_sql_query = query
-                st.session_state.current_query_explanation = f"Результаты отчета: {report_type}"
-        
-        # Display stored results if available
-        if st.session_state.current_query_results:
-            df, error = st.session_state.current_query_results
-            if error:
-                st.error(f"Ошибка выполнения запроса: {error}")
-            else:
-                st.markdown("#### Результаты отчета")
-                st.dataframe(df)
-                
-                # Download option
-                if not df.empty:
-                    csv = df.to_csv(index=False)
-                    st.download_button(
-                        label="Скачать результаты как CSV",
-                        data=csv,
-                        file_name=f"report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                        mime="text/csv"
-                    )
+    #### 2. Пользовательские запросы
+    - Задайте вопрос на русском языке
+    - Система создаст SQL-запрос и покажет результаты
+    - Используйте примеры для подсказки
     
-    with tab2:
-        st.subheader("Создание пользовательского запроса")
-        
-        # Show example questions
-        with st.expander("📝 Примеры вопросов"):
-            st.markdown("""
-            **Анализ трафика:**
-            - Покажи мой трафик за вчера
-            - Сколько трафика было в прошлом месяце?
-            - Дни с максимальным трафиком
-            
-            **Информация об устройствах:**
-            - Какие у меня установлены устройства?
-            - Когда установили последнее устройство?
-            - Список устройств по типам
-            
-            **Договоры и оплата:**
-            - Информация о текущем договоре
-            - Когда заканчивается договор?
-            - Сумма оплаты по договору
-            """)
-        
-        # Show example questions
-        with st.expander("💡 Примеры вопросов"):
-            st.markdown("""
-            **📊 Аналитика:**
-            - Покажи статистику трафика за последний месяц
-            - Какие устройства потребляют больше всего трафика?
-            - Сколько у меня активных соглашений?
-            
-            **🔧 Технические:**
-            - Какие требования к антенне для спутниковой связи?
-            - Как настроить GPS трекинг?
-            - Какие параметры конфигурации нужны?
-            
-            **📋 Документы:**
-            - Покажи технические регламенты
-            - Какие стандарты безопасности?
-            - Процедуры настройки оборудования
-            """)
-        
-        # Use session_state for user question
-        user_question = st.text_area(
-            "💬 Задайте ваш вопрос:",
-            value=st.session_state.current_user_question,
-            placeholder="Например: Покажи статистику трафика за последнюю неделю",
-            height=100,
-            key="user_question"
-        )
-        
-        # Update session_state when question changes
-        if user_question != st.session_state.current_user_question:
-            st.session_state.current_user_question = user_question
-        
-        if st.button("Создать запрос"):
-            if user_question:
-                with st.spinner("Генерирую запрос..."):
-                    # Try to use multi-KB RAG first for enhanced context
-                    if st.session_state.get('multi_rag') and st.session_state.multi_rag.get_available_kbs():
-                        # Use multi-KB RAG for enhanced context
-                        kb_response = st.session_state.multi_rag.get_response_with_context(
-                            user_question, context_limit=3
-                        )
-                        
-                        # Show KB context if available
-                        if kb_response and "Не найдено релевантной информации" not in kb_response:
-                            st.markdown("#### 📚 Контекст из базы знаний")
-                            st.info(kb_response)
-                            st.markdown("---")
-                    
-                    # Generate SQL query
-                    query, explanation = st.session_state.rag_helper.get_query_suggestion(
-                        user_question, st.session_state.company
-                    )
-                    if query:
-                        # Store results in session_state
-                        st.session_state.current_sql_query = query
-                        st.session_state.current_query_explanation = explanation
-                        st.session_state.current_query_results = execute_query(query)
-                        
-                        st.markdown("#### Объяснение запроса")
-                        st.info(explanation)
-                        st.markdown("#### SQL Запрос")
-                        st.code(query, language="sql")
-                        st.markdown("#### Результаты")
-                        display_query_results(query)
-                    else:
-                        st.error("Не удалось сгенерировать запрос. Попробуйте переформулировать вопрос.")
-            else:
-                st.warning("Пожалуйста, введите ваш вопрос.")
-        
-        # Display stored results if available
-        if st.session_state.current_query_explanation and st.session_state.current_sql_query:
-            st.markdown("#### Последний запрос")
-            st.markdown("**Объяснение запроса**")
-            st.info(st.session_state.current_query_explanation)
-            st.markdown("**SQL Запрос**")
-            st.code(st.session_state.current_sql_query, language="sql")
-            
-            if st.session_state.current_query_results:
-                df, error = st.session_state.current_query_results
-                if error:
-                    st.error(f"Ошибка выполнения запроса: {error}")
-                else:
-                    st.markdown("**Результаты**")
-                    st.dataframe(df)
-                    
-                    # Download option
-                    if not df.empty:
-                        csv = df.to_csv(index=False)
-                        st.download_button(
-                            label="Скачать результаты как CSV",
-                            data=csv,
-                            file_name=f"query_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                            mime="text/csv"
-                        )
+    #### 3. Умный помощник
+    - Задавайте вопросы по документации и техническим требованиям
+    - Система найдет релевантную информацию в базах знаний
+    - Показывает источники информации
     
-    with tab3:
-        st.markdown("""
-        ### Как пользоваться личным кабинетом
-        
-        #### 1. Стандартные отчеты
-        - Выберите готовый отчет из списка
-        - Нажмите "Показать отчет"
-        - Результаты можно скачать в формате CSV
-        
-        #### 2. Пользовательские запросы
-        - Задайте вопрос на русском языке
-        - Система создаст SQL-запрос и покажет результаты
-        - Используйте примеры для подсказки
-        
-        #### 3. Ограничения
-        - Доступны только данные вашей компании
-        - Некоторые сложные запросы могут требовать уточнения
-        - При ошибках попробуйте переформулировать вопрос
-        """)
-        
-        if st.button("Показать подробную справку"):
-            with st.spinner("Загружаю справку..."):
+    #### 4. Ограничения
+    - Доступны только данные вашей компании
+    - Некоторые сложные запросы могут требовать уточнения
+    - При ошибках попробуйте переформулировать вопрос
+    """)
+    
+    if st.button("Показать подробную справку"):
+        with st.spinner("Загружаю справку..."):
+            if st.session_state.rag_helper:
                 help_text = st.session_state.rag_helper.get_response("Как пользоваться личным кабинетом?")
                 st.markdown(help_text)
+            else:
+                st.error("Система помощи недоступна.")
 
 def render_staff_view():
     st.title("🔧 Административная панель СТЭККОМ")
