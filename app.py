@@ -492,41 +492,40 @@ def render_user_view():
     
     if st.sidebar.button("Получить ответ", key="get_doc_answer"):
         if doc_question:
-            with st.spinner("Ищу ответ..."):
-                # Try multi-KB RAG first
-                if st.session_state.get('multi_rag') and st.session_state.multi_rag.get_available_kbs():
-                    # Show sources first
-                    try:
-                        docs = st.session_state.multi_rag.search_across_kbs(doc_question, k=k_sources)
-                    except Exception:
-                        docs = []
+            # Try multi-KB RAG first
+            if st.session_state.get('multi_rag') and st.session_state.multi_rag.get_available_kbs():
+                # Show sources first
+                try:
+                    docs = st.session_state.multi_rag.search_across_kbs(doc_question, k=k_sources)
+                except Exception:
+                    docs = []
 
-                    if docs:
-                        st.sidebar.markdown("**Источники:**")
-                        for i, d in enumerate(docs, 1):
-                            title = d.metadata.get('title', 'Документ')
-                            kb_name = d.metadata.get('kb_name', '')
-                            search_type = d.metadata.get('search_type', 'vector_search')
-                            preview = d.page_content[:200].replace("\n", " ") + ("…" if len(d.page_content) > 200 else "")
-                            st.sidebar.write(f"{i}. {title} — {kb_name} ({search_type})")
-                            st.sidebar.caption(preview)
+                if docs:
+                    st.sidebar.markdown("**Источники:**")
+                    for i, d in enumerate(docs, 1):
+                        title = d.metadata.get('title', 'Документ')
+                        kb_name = d.metadata.get('kb_name', '')
+                        search_type = d.metadata.get('search_type', 'vector_search')
+                        preview = d.page_content[:200].replace("\n", " ") + ("…" if len(d.page_content) > 200 else "")
+                        st.sidebar.write(f"{i}. {title} — {kb_name} ({search_type})")
+                        st.sidebar.caption(preview)
 
-                    answer = st.session_state.multi_rag.get_response_with_context(doc_question, context_limit=k_sources)
-                    if answer and "Не найдено релевантной информации" not in answer:
-                        st.session_state.assistant_answer = answer
-                    else:
-                        # Fallback to original RAG helper
-                        if st.session_state.rag_helper:
-                            answer = st.session_state.rag_helper.get_response(doc_question)
-                            st.session_state.assistant_answer = answer
-                        else:
-                            st.session_state.assistant_answer = "Система помощи недоступна."
-                elif st.session_state.rag_helper:
-                    # Use original RAG helper
-                    answer = st.session_state.rag_helper.get_response(doc_question)
+                answer = st.session_state.multi_rag.get_response_with_context(doc_question, context_limit=k_sources)
+                if answer and "Не найдено релевантной информации" not in answer:
                     st.session_state.assistant_answer = answer
                 else:
-                    st.session_state.assistant_answer = "Система помощи недоступна."
+                    # Fallback to original RAG helper
+                    if st.session_state.rag_helper:
+                        answer = st.session_state.rag_helper.get_response(doc_question)
+                        st.session_state.assistant_answer = answer
+                    else:
+                        st.session_state.assistant_answer = "Система помощи недоступна."
+            elif st.session_state.rag_helper:
+                # Use original RAG helper
+                answer = st.session_state.rag_helper.get_response(doc_question)
+                st.session_state.assistant_answer = answer
+            else:
+                st.session_state.assistant_answer = "Система помощи недоступна."
         else:
             st.sidebar.warning("Пожалуйста, введите ваш вопрос.")
     
