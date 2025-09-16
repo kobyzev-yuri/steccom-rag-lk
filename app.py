@@ -413,7 +413,7 @@ def execute_standard_query(query_name: str, company: str, user_role: str = 'user
             df = pd.read_sql_query(query, conn)
         else:
             # Regular users see only their company data
-        df = pd.read_sql_query(STANDARD_QUERIES[query_name], conn, params=(company,))
+            df = pd.read_sql_query(STANDARD_QUERIES[query_name], conn, params=(company,))
         
         return df, None
     except Exception as e:
