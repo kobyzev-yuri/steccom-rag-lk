@@ -67,16 +67,34 @@ def init_db():
         role TEXT CHECK(role IN ('staff', 'user')) NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS service_types (
+        id INTEGER PRIMARY KEY,
+        name TEXT UNIQUE NOT NULL,
+        unit TEXT NOT NULL,
+        description TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS tariffs (
+        id INTEGER PRIMARY KEY,
+        service_type_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        price_per_unit REAL NOT NULL,
+        monthly_fee REAL NOT NULL DEFAULT 0,
+        traffic_limit INTEGER NOT NULL DEFAULT 0,
+        is_active BOOLEAN NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (service_type_id) REFERENCES service_types(id)
+    );
+
     CREATE TABLE IF NOT EXISTS agreements (
         id INTEGER PRIMARY KEY,
         user_id INTEGER,
-        plan_type TEXT NOT NULL,
-        monthly_fee REAL NOT NULL,
-        traffic_limit_bytes INTEGER NOT NULL,
+        tariff_id INTEGER NOT NULL,
         start_date TEXT NOT NULL,
         end_date TEXT NOT NULL,
         status TEXT CHECK(status IN ('active', 'pending', 'terminated')) NOT NULL,
-        FOREIGN KEY (user_id) REFERENCES users(id)
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (tariff_id) REFERENCES tariffs(id)
     );
 
     CREATE TABLE IF NOT EXISTS devices (
@@ -88,17 +106,31 @@ def init_db():
         FOREIGN KEY (user_id) REFERENCES users(id)
     );
 
+    CREATE TABLE IF NOT EXISTS sessions (
+        id INTEGER PRIMARY KEY,
+        imei TEXT NOT NULL,
+        service_type_id INTEGER NOT NULL,
+        session_start TEXT NOT NULL,
+        session_end TEXT NOT NULL,
+        usage_amount INTEGER NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (imei) REFERENCES devices(imei),
+        FOREIGN KEY (service_type_id) REFERENCES service_types(id)
+    );
+
     CREATE TABLE IF NOT EXISTS billing_records (
         id INTEGER PRIMARY KEY,
         agreement_id INTEGER,
         imei TEXT NOT NULL,
+        service_type_id INTEGER NOT NULL,
         billing_date TEXT NOT NULL,
-        traffic_bytes INTEGER NOT NULL,
+        usage_amount INTEGER NOT NULL,
         amount REAL NOT NULL,
         paid BOOLEAN NOT NULL DEFAULT 0,
         payment_date TEXT,
         FOREIGN KEY (agreement_id) REFERENCES agreements(id),
-        FOREIGN KEY (imei) REFERENCES devices(imei)
+        FOREIGN KEY (imei) REFERENCES devices(imei),
+        FOREIGN KEY (service_type_id) REFERENCES service_types(id)
     );
     ''')
     
@@ -107,6 +139,25 @@ def init_db():
         # Hash passwords
         def hash_password(password: str) -> str:
             return hashlib.sha256(password.encode()).hexdigest()
+        
+        # Insert service types
+        c.executescript('''
+        INSERT OR IGNORE INTO service_types (id, name, unit, description) VALUES 
+            (1, 'SBD', 'KB', 'Short Burst Data - спутниковая передача данных'),
+            (2, 'VSAT_DATA', 'MB', 'VSAT Data - высокоскоростная передача данных'),
+            (3, 'VSAT_VOICE', 'minutes', 'VSAT Voice - спутниковая телефония');
+        ''')
+        
+        # Insert tariffs
+        c.executescript('''
+        INSERT OR IGNORE INTO tariffs (id, service_type_id, name, price_per_unit, monthly_fee, traffic_limit) VALUES 
+            (1, 1, 'SBD Basic', 0.05, 50.00, 10000),
+            (2, 1, 'SBD Premium', 0.03, 100.00, 50000),
+            (3, 2, 'VSAT Data 1GB', 0.10, 200.00, 1024),
+            (4, 2, 'VSAT Data 5GB', 0.08, 400.00, 5120),
+            (5, 3, 'VSAT Voice 100min', 0.50, 150.00, 100),
+            (6, 3, 'VSAT Voice 500min', 0.40, 300.00, 500);
+        ''')
         
         # Insert users with IGNORE to avoid conflicts
         c.executescript(f'''
@@ -120,11 +171,11 @@ def init_db():
         arctic_user_id = c.execute("SELECT id FROM users WHERE username = 'arctic_user'").fetchone()[0]
         desert_user_id = c.execute("SELECT id FROM users WHERE username = 'desert_user'").fetchone()[0]
         
-        # Insert agreements with IGNORE
+        # Insert agreements with IGNORE (using tariff_id instead of plan_type)
         c.executescript(f'''
-        INSERT OR IGNORE INTO agreements (user_id, plan_type, monthly_fee, traffic_limit_bytes, start_date, end_date, status) VALUES 
-            ({arctic_user_id}, 'premium', 1000.00, 1099511627776, '2025-01-01', '2025-12-31', 'active'),
-            ({desert_user_id}, 'standard', 500.00, 549755813888, '2025-01-01', '2025-12-31', 'active');
+        INSERT OR IGNORE INTO agreements (user_id, tariff_id, start_date, end_date, status) VALUES 
+            ({arctic_user_id}, 2, '2025-01-01', '2025-12-31', 'active'),
+            ({desert_user_id}, 4, '2025-01-01', '2025-12-31', 'active');
         ''')
         
         # Get agreement IDs
@@ -134,50 +185,102 @@ def init_db():
         # Insert devices with IGNORE
         c.executescript(f'''
         INSERT OR IGNORE INTO devices (imei, user_id, device_type, model, activated_at) VALUES 
-            ('123456789012345', {arctic_user_id}, 'satellite', 'SAT-100', '2025-01-01'),
-            ('123456789012346', {arctic_user_id}, 'satellite', 'SAT-100', '2025-01-01'),
-            ('223456789012345', {desert_user_id}, 'satellite', 'SAT-200', '2025-01-01');
+            ('123456789012345', {arctic_user_id}, 'SBD', 'SAT-100', '2025-01-01'),
+            ('123456789012346', {arctic_user_id}, 'VSAT', 'SAT-200', '2025-01-01'),
+            ('223456789012345', {desert_user_id}, 'VSAT', 'SAT-300', '2025-01-01');
         ''')
 
-        # Generate 2025 traffic data (January to July)
-        traffic_data = []
+        # Generate 2025 traffic data for all 12 months
+        import random
+        from datetime import datetime, timedelta
         
-        # Arctic Research Station (2 devices)
-        for month in range(1, 8):  # January to July
-            # First device - higher usage pattern
-            base_traffic = 5 * 1024 * 1024 * 1024  # 5 GB base
-            monthly_variation = month * 0.5 * 1024 * 1024 * 1024  # Increasing by 0.5 GB per month
-            traffic_bytes = int(base_traffic + monthly_variation)
-            amount = round(traffic_bytes / (1024 * 1024 * 1024) * 100, 2)  # $100 per GB
-            traffic_data.append(
-                f"({arctic_agreement_id}, '123456789012345', '2025-{month:02d}-15', {traffic_bytes}, {amount}, 1)"
-            )
+        # Generate sessions and billing records for all 2025 months
+        for month in range(1, 13):  # January to December
+            # Arctic Research Station - SBD device (123456789012345)
+            for day in range(1, 29):  # Generate data for most days
+                if random.random() > 0.1:  # 90% chance of activity
+                    # Generate 1-5 sessions per day
+                    num_sessions = random.randint(1, 5)
+                    daily_usage = 0
+                    
+                    for session in range(num_sessions):
+                        # SBD usage: 1-50 KB per session
+                        session_usage = random.randint(1, 50)
+                        daily_usage += session_usage
+                        
+                        # Session start time (random hour)
+                        start_hour = random.randint(8, 20)
+                        session_start = f"2025-{month:02d}-{day:02d} {start_hour:02d}:{random.randint(0,59):02d}:00"
+                        session_end = f"2025-{month:02d}-{day:02d} {start_hour:02d}:{random.randint(0,59):02d}:00"
+                        
+                        c.execute('''
+                        INSERT OR IGNORE INTO sessions (imei, service_type_id, session_start, session_end, usage_amount)
+                        VALUES (?, 1, ?, ?, ?)
+                        ''', ('123456789012345', session_start, session_end, session_usage))
+                    
+                    # Monthly billing record (sum of daily usage)
+                    if day == 28:  # End of month
+                        amount = round(daily_usage * 0.05, 2)  # $0.05 per KB
+                        c.execute('''
+                        INSERT OR IGNORE INTO billing_records (agreement_id, imei, service_type_id, billing_date, usage_amount, amount, paid)
+                        VALUES (?, ?, 1, ?, ?, ?, 1)
+                        ''', (arctic_agreement_id, '123456789012345', f"2025-{month:02d}-28", daily_usage, amount))
             
-            # Second device - lower usage pattern
-            base_traffic = 3 * 1024 * 1024 * 1024  # 3 GB base
-            monthly_variation = month * 0.3 * 1024 * 1024 * 1024  # Increasing by 0.3 GB per month
-            traffic_bytes = int(base_traffic + monthly_variation)
-            amount = round(traffic_bytes / (1024 * 1024 * 1024) * 100, 2)
-            traffic_data.append(
-                f"({arctic_agreement_id}, '123456789012346', '2025-{month:02d}-15', {traffic_bytes}, {amount}, 1)"
-            )
-
-        # Desert Observatory (1 device)
-        for month in range(1, 8):  # January to July
-            base_traffic = 4 * 1024 * 1024 * 1024  # 4 GB base
-            monthly_variation = month * 0.4 * 1024 * 1024 * 1024  # Increasing by 0.4 GB per month
-            traffic_bytes = int(base_traffic + monthly_variation)
-            amount = round(traffic_bytes / (1024 * 1024 * 1024) * 100, 2)
-            traffic_data.append(
-                f"({desert_agreement_id}, '223456789012345', '2025-{month:02d}-15', {traffic_bytes}, {amount}, 1)"
-            )
-
-        # Insert traffic data with IGNORE
-        if traffic_data:
-            c.execute(f'''
-            INSERT OR IGNORE INTO billing_records (agreement_id, imei, billing_date, traffic_bytes, amount, paid) 
-            VALUES {','.join(traffic_data)};
-            ''')
+            # Arctic Research Station - VSAT Data device (123456789012346)
+            for day in range(1, 29):
+                if random.random() > 0.2:  # 80% chance of activity
+                    # VSAT Data usage: 10-200 MB per day
+                    daily_usage = random.randint(10, 200)
+                    
+                    # Generate 1-3 sessions per day
+                    num_sessions = random.randint(1, 3)
+                    session_usage = daily_usage // num_sessions
+                    
+                    for session in range(num_sessions):
+                        start_hour = random.randint(9, 18)
+                        session_start = f"2025-{month:02d}-{day:02d} {start_hour:02d}:{random.randint(0,59):02d}:00"
+                        session_end = f"2025-{month:02d}-{day:02d} {start_hour+1:02d}:{random.randint(0,59):02d}:00"
+                        
+                        c.execute('''
+                        INSERT OR IGNORE INTO sessions (imei, service_type_id, session_start, session_end, usage_amount)
+                        VALUES (?, 2, ?, ?, ?)
+                        ''', ('123456789012346', session_start, session_end, session_usage))
+                    
+                    # Monthly billing record
+                    if day == 28:
+                        amount = round(daily_usage * 0.08, 2)  # $0.08 per MB
+                        c.execute('''
+                        INSERT OR IGNORE INTO billing_records (agreement_id, imei, service_type_id, billing_date, usage_amount, amount, paid)
+                        VALUES (?, ?, 2, ?, ?, ?, 1)
+                        ''', (arctic_agreement_id, '123456789012346', f"2025-{month:02d}-28", daily_usage, amount))
+            
+            # Desert Observatory - VSAT device (223456789012345)
+            for day in range(1, 29):
+                if random.random() > 0.15:  # 85% chance of activity
+                    # VSAT Data usage: 50-500 MB per day
+                    daily_usage = random.randint(50, 500)
+                    
+                    # Generate 2-4 sessions per day
+                    num_sessions = random.randint(2, 4)
+                    session_usage = daily_usage // num_sessions
+                    
+                    for session in range(num_sessions):
+                        start_hour = random.randint(8, 19)
+                        session_start = f"2025-{month:02d}-{day:02d} {start_hour:02d}:{random.randint(0,59):02d}:00"
+                        session_end = f"2025-{month:02d}-{day:02d} {start_hour+1:02d}:{random.randint(0,59):02d}:00"
+                        
+                        c.execute('''
+                        INSERT OR IGNORE INTO sessions (imei, service_type_id, session_start, session_end, usage_amount)
+                        VALUES (?, 2, ?, ?, ?)
+                        ''', ('223456789012345', session_start, session_end, session_usage))
+                    
+                    # Monthly billing record
+                    if day == 28:
+                        amount = round(daily_usage * 0.08, 2)  # $0.08 per MB
+                        c.execute('''
+                        INSERT OR IGNORE INTO billing_records (agreement_id, imei, service_type_id, billing_date, usage_amount, amount, paid)
+                        VALUES (?, ?, 2, ?, ?, ?, 1)
+                        ''', (desert_agreement_id, '223456789012345', f"2025-{month:02d}-28", daily_usage, amount))
     
     conn.commit()
     conn.close()
@@ -205,15 +308,18 @@ STANDARD_QUERIES = {
     "My monthly traffic": """
     SELECT 
         strftime('%Y-%m', b.billing_date) as month,
-        ROUND(CAST(SUM(b.traffic_bytes) AS FLOAT) / (1024.0 * 1024.0 * 1024.0), 2) as traffic_gb,
-        COUNT(DISTINCT b.imei) as active_devices,
-        ROUND(SUM(b.amount), 2) as total_amount
+        st.name as service_type,
+        st.unit as unit,
+        SUM(b.usage_amount) as total_usage,
+        ROUND(SUM(b.amount), 2) as total_amount,
+        COUNT(DISTINCT b.imei) as active_devices
     FROM billing_records b
     JOIN agreements a ON b.agreement_id = a.id
     JOIN users u ON a.user_id = u.id
+    JOIN service_types st ON b.service_type_id = st.id
     WHERE u.company = ?
-    GROUP BY strftime('%Y-%m', b.billing_date)
-    ORDER BY month DESC;
+    GROUP BY strftime('%Y-%m', b.billing_date), st.name, st.unit
+    ORDER BY month DESC, st.name;
     """,
     
     "My devices": """
@@ -222,40 +328,73 @@ STANDARD_QUERIES = {
         d.device_type as type,
         d.model as model,
         d.activated_at as activation_date,
-        ROUND(CAST(SUM(b.traffic_bytes) AS FLOAT) / (1024.0 * 1024.0 * 1024.0), 2) as total_traffic_gb
+        st.name as service_type,
+        st.unit as unit,
+        SUM(b.usage_amount) as total_usage,
+        ROUND(SUM(b.amount), 2) as total_amount
     FROM devices d
     LEFT JOIN billing_records b ON d.imei = b.imei
+    LEFT JOIN service_types st ON b.service_type_id = st.id
     JOIN users u ON d.user_id = u.id
     WHERE u.company = ?
-    GROUP BY d.imei;
+    GROUP BY d.imei, st.name, st.unit
+    ORDER BY d.imei, st.name;
     """,
     
     "Current month usage": """
     SELECT 
         d.imei as device_id,
         d.model as model,
-        ROUND(CAST(SUM(b.traffic_bytes) AS FLOAT) / (1024.0 * 1024.0 * 1024.0), 2) as traffic_gb,
+        st.name as service_type,
+        st.unit as unit,
+        SUM(b.usage_amount) as usage_amount,
         ROUND(SUM(b.amount), 2) as total_amount
     FROM billing_records b
     JOIN devices d ON b.imei = d.imei
     JOIN users u ON d.user_id = u.id
+    JOIN service_types st ON b.service_type_id = st.id
     WHERE u.company = ?
     AND strftime('%Y-%m', b.billing_date) = strftime('%Y-%m', 'now')
-    GROUP BY d.imei;
+    GROUP BY d.imei, st.name, st.unit
+    ORDER BY d.imei, st.name;
     """,
     
     "Current agreement": """
     SELECT 
-        a.plan_type as plan,
-        a.monthly_fee as fee,
+        t.name as tariff_name,
+        st.name as service_type,
+        st.unit as unit,
+        t.price_per_unit as price_per_unit,
+        t.monthly_fee as monthly_fee,
+        t.traffic_limit as traffic_limit,
         a.start_date as start_date,
         a.end_date as end_date,
         a.status as status
     FROM agreements a
     JOIN users u ON a.user_id = u.id
+    JOIN tariffs t ON a.tariff_id = t.id
+    JOIN service_types st ON t.service_type_id = st.id
     WHERE u.company = ?
         AND date('now') BETWEEN date(a.start_date) AND date(a.end_date)
         AND a.status = 'active';
+    """,
+    
+    "Service sessions": """
+    SELECT 
+        s.imei as device_id,
+        st.name as service_type,
+        st.unit as unit,
+        s.session_start as start_time,
+        s.session_end as end_time,
+        s.usage_amount as usage_amount
+    FROM sessions s
+    JOIN devices d ON s.imei = d.imei
+    JOIN users u ON d.user_id = u.id
+    JOIN service_types st ON s.service_type_id = st.id
+    WHERE u.company = ?
+    AND date(s.session_start) >= date('now', '-30 days')
+    ORDER BY s.session_start DESC
+    LIMIT 100;
     """
 }
 
@@ -340,26 +479,36 @@ Key Information:
    - IMPORTANT: Date filtering should be done in the main query, not in WHERE clause of CTEs
 
 2. Traffic and Money:
-   - Traffic in GB: ROUND(CAST(traffic_bytes AS FLOAT) / (1024.0 * 1024.0 * 1024.0), 2)
+   - Usage amounts are stored in usage_amount field (KB for SBD, MB for VSAT_DATA, minutes for VSAT_VOICE)
    - Monthly totals: GROUP BY strftime('%Y-%m', billing_date)
    - Money totals: ROUND(SUM(amount), 2)
+   - Service types: SBD (KB), VSAT_DATA (MB), VSAT_VOICE (minutes)
 
 3. Table Relationships:
    billing_records -> agreements (agreement_id)
+   billing_records -> service_types (service_type_id)
    agreements -> users (user_id)
+   agreements -> tariffs (tariff_id)
+   tariffs -> service_types (service_type_id)
    devices -> users (user_id)
+   sessions -> devices (imei)
+   sessions -> service_types (service_type_id)
 
-Example Query - Traffic by company in last 3 months:
+Example Query - Traffic by company and service type in last 3 months:
 SELECT 
     strftime('%Y-%m', b.billing_date) as month,
     u.company,
-    ROUND(CAST(SUM(b.traffic_bytes) AS FLOAT) / (1024.0 * 1024.0 * 1024.0), 2) as total_gb
+    st.name as service_type,
+    st.unit as unit,
+    SUM(b.usage_amount) as total_usage,
+    ROUND(SUM(b.amount), 2) as total_amount
 FROM billing_records b
 JOIN agreements a ON b.agreement_id = a.id
 JOIN users u ON a.user_id = u.id
+JOIN service_types st ON b.service_type_id = st.id
 WHERE date(b.billing_date) >= date('now', '-3 months')
-GROUP BY strftime('%Y-%m', b.billing_date), u.company
-ORDER BY month DESC, total_gb DESC;
+GROUP BY strftime('%Y-%m', b.billing_date), u.company, st.name, st.unit
+ORDER BY month DESC, total_usage DESC;
 
 Question: {question}
 
@@ -469,13 +618,13 @@ def render_standard_reports():
         [
             "Текущий договор",
             "Список устройств",
-            "Трафик за неделю",
             "Трафик за месяц",
-            "Статистика по типам устройств",
-            "Дни максимальной нагрузки"
+            "Использование за текущий месяц",
+            "Сессии за последние 30 дней",
+            "Статистика по типам услуг"
         ],
-        index=["Текущий договор", "Список устройств", "Трафик за неделю", 
-               "Трафик за месяц", "Статистика по типам устройств", "Дни максимальной нагрузки"].index(st.session_state.current_report_type),
+        index=["Текущий договор", "Список устройств", "Трафик за месяц", 
+               "Использование за текущий месяц", "Сессии за последние 30 дней", "Статистика по типам услуг"].index(st.session_state.current_report_type),
         key="report_type"
     )
     
@@ -486,88 +635,31 @@ def render_standard_reports():
     if st.button("Показать отчет", key="show_report"):
         with st.spinner("Загрузка отчета..."):
             if report_type == "Текущий договор":
-                query = """
-                SELECT 
-                    a.plan_type as plan,
-                    a.monthly_fee as fee,
-                    a.start_date as start_date,
-                    a.end_date as end_date,
-                    a.status as status
-                FROM agreements a
-                JOIN users u ON a.user_id = u.id
-                WHERE u.company = ?
-                    AND date('now') BETWEEN date(a.start_date) AND date(a.end_date)
-                    AND a.status = 'active'
-                """
+                query = STANDARD_QUERIES["Current agreement"]
             elif report_type == "Список устройств":
-                query = """
-                SELECT 
-                    d.imei as device_id,
-                    d.device_type as type,
-                    d.model as model,
-                    d.activated_at as activation_date
-                FROM devices d
-                JOIN users u ON d.user_id = u.id
-                WHERE u.company = ?
-                ORDER BY d.activated_at DESC
-                """
-            elif report_type == "Трафик за неделю":
-                query = """
-                SELECT 
-                    date(b.billing_date) as date,
-                    ROUND(CAST(SUM(b.traffic_bytes) AS FLOAT) / (1024.0 * 1024.0 * 1024.0), 2) as traffic_gb,
-                    COUNT(DISTINCT b.imei) as active_devices,
-                    ROUND(SUM(b.amount), 2) as total_amount
-                FROM billing_records b
-                JOIN devices d ON b.imei = d.imei
-                JOIN users u ON d.user_id = u.id
-                WHERE u.company = ?
-                    AND date(b.billing_date) >= date('now', '-7 days')
-                GROUP BY date(b.billing_date)
-                ORDER BY date DESC
-                """
+                query = STANDARD_QUERIES["My devices"]
             elif report_type == "Трафик за месяц":
+                query = STANDARD_QUERIES["My monthly traffic"]
+            elif report_type == "Использование за текущий месяц":
+                query = STANDARD_QUERIES["Current month usage"]
+            elif report_type == "Сессии за последние 30 дней":
+                query = STANDARD_QUERIES["Service sessions"]
+            elif report_type == "Статистика по типам услуг":
                 query = """
                 SELECT 
-                    date(b.billing_date) as date,
-                    ROUND(CAST(SUM(b.traffic_bytes) AS FLOAT) / (1024.0 * 1024.0 * 1024.0), 2) as traffic_gb,
-                    COUNT(DISTINCT b.imei) as active_devices,
-                    ROUND(SUM(b.amount), 2) as total_amount
+                    st.name as service_type,
+                    st.unit as unit,
+                    COUNT(DISTINCT d.imei) as device_count,
+                    SUM(b.usage_amount) as total_usage,
+                    ROUND(SUM(b.amount), 2) as total_amount,
+                    ROUND(AVG(b.usage_amount), 2) as avg_usage_per_record
                 FROM billing_records b
                 JOIN devices d ON b.imei = d.imei
                 JOIN users u ON d.user_id = u.id
+                JOIN service_types st ON b.service_type_id = st.id
                 WHERE u.company = ?
-                    AND date(b.billing_date) >= date('now', '-30 days')
-                GROUP BY date(b.billing_date)
-                ORDER BY date DESC
-                """
-            elif report_type == "Статистика по типам устройств":
-                query = """
-                SELECT 
-                    d.device_type as type,
-                    COUNT(*) as count,
-                    MIN(d.activated_at) as first_activation,
-                    MAX(d.activated_at) as last_activation
-                FROM devices d
-                JOIN users u ON d.user_id = u.id
-                WHERE u.company = ?
-                GROUP BY d.device_type
-                """
-            elif report_type == "Дни максимальной нагрузки":
-                query = """
-                SELECT 
-                    date(b.billing_date) as date,
-                    ROUND(CAST(SUM(b.traffic_bytes) AS FLOAT) / (1024.0 * 1024.0 * 1024.0), 2) as traffic_gb,
-                    COUNT(DISTINCT b.imei) as active_devices,
-                    ROUND(SUM(b.amount), 2) as total_amount
-                FROM billing_records b
-                JOIN devices d ON b.imei = d.imei
-                JOIN users u ON d.user_id = u.id
-                WHERE u.company = ?
-                    AND date(b.billing_date) >= date('now', '-30 days')
-                GROUP BY date(b.billing_date)
-                ORDER BY traffic_gb DESC
-                LIMIT 5
+                GROUP BY st.name, st.unit
+                ORDER BY total_usage DESC
                 """
             
             # Store results in session_state
