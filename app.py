@@ -284,6 +284,43 @@ def init_db():
                         VALUES (?, ?, 2, ?, ?, ?, 1)
                         ''', (desert_agreement_id, '223456789012345', f"2025-{month:02d}-28", daily_usage, amount))
     
+    # Create knowledge base tables
+    c.executescript('''
+    CREATE TABLE IF NOT EXISTS knowledge_bases (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        description TEXT,
+        category TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        is_active BOOLEAN DEFAULT 1,
+        created_by TEXT NOT NULL
+    );
+    
+    CREATE TABLE IF NOT EXISTS knowledge_documents (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        kb_id INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        file_path TEXT,
+        content_type TEXT NOT NULL,
+        file_size INTEGER,
+        upload_date TEXT NOT NULL,
+        processed BOOLEAN DEFAULT 0,
+        processing_status TEXT DEFAULT 'pending',
+        metadata TEXT,
+        FOREIGN KEY (kb_id) REFERENCES knowledge_bases(id)
+    );
+    
+    CREATE TABLE IF NOT EXISTS knowledge_topics (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        kb_id INTEGER NOT NULL,
+        topic_name TEXT NOT NULL,
+        description TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (kb_id) REFERENCES knowledge_bases(id)
+    );
+    ''')
+    
     conn.commit()
     conn.close()
 
@@ -977,21 +1014,21 @@ def render_custom_query():
                         st.markdown("---")
                 
                 # Generate SQL query
-                    query, explanation = st.session_state.rag_helper.get_query_suggestion(
-                        user_question, st.session_state.company
-                    )
-                    if query:
-                        # Store results in session_state
-                        st.session_state.current_sql_query = query
-                        st.session_state.current_query_explanation = explanation
-                        st.session_state.current_query_results = execute_query(query)
-                        
-                        st.markdown("#### Объяснение запроса")
-                        st.info(explanation)
-                        st.markdown("#### SQL Запрос")
-                        st.code(query, language="sql")
-                        st.markdown("#### Результаты")
-                        display_query_results(query)
+                query, explanation = st.session_state.rag_helper.get_query_suggestion(
+                    user_question, st.session_state.company
+                )
+                if query:
+                    # Store results in session_state
+                    st.session_state.current_sql_query = query
+                    st.session_state.current_query_explanation = explanation
+                    st.session_state.current_query_results = execute_query(query)
+                    
+                    st.markdown("#### Объяснение запроса")
+                    st.info(explanation)
+                    st.markdown("#### SQL Запрос")
+                    st.code(query, language="sql")
+                    st.markdown("#### Результаты")
+                    display_query_results(query)
                 else:
                     st.error("Не удалось сгенерировать запрос. Попробуйте переформулировать вопрос.")
         else:
