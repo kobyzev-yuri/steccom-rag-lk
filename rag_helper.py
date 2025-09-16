@@ -245,26 +245,46 @@ class RAGHelper:
         1. СТРУКТУРА ДАННЫХ:
            
            Таблицы в базе данных:
-           - users: информация о пользователях
-           - agreements: договоры и тарифы
-           - devices: подключенные устройства
-           - billing_records: записи о трафике и оплате
+           - users: информация о пользователях (id, username, password, company, role)
+           - service_types: типы услуг (id, name, unit, description)
+           - tariffs: тарифы (id, service_type_id, name, price_per_unit, monthly_fee, traffic_limit)
+           - agreements: договоры (id, user_id, tariff_id, start_date, end_date, status)
+           - devices: подключенные устройства (imei, user_id, device_type, model, activated_at)
+           - sessions: сессии использования (id, imei, service_type_id, session_start, session_end, usage_amount)
+           - billing_records: записи о трафике и оплате (id, agreement_id, imei, service_type_id, billing_date, usage_amount, amount, paid)
            
-        2. ФОРМАТЫ ДАННЫХ:
+        2. ТИПЫ УСЛУГ:
+           
+           - SBD: Short Burst Data (единица измерения: KB)
+           - VSAT_DATA: VSAT Data (единица измерения: MB) 
+           - VSAT_VOICE: VSAT Voice (единица измерения: minutes)
+           
+        3. ФОРМАТЫ ДАННЫХ:
            
            Даты: YYYY-MM-DD
            Время: HH:MM:SS
-           Трафик: в байтах, конвертируется в ГБ
+           Трафик: usage_amount в соответствующих единицах (KB/MB/minutes)
            Деньги: в рублях с двумя знаками после запятой
            
-        3. ОГРАНИЧЕНИЯ СИСТЕМЫ:
+        4. СВЯЗИ ТАБЛИЦ:
+           
+           billing_records -> agreements (agreement_id)
+           billing_records -> service_types (service_type_id)
+           agreements -> users (user_id)
+           agreements -> tariffs (tariff_id)
+           tariffs -> service_types (service_type_id)
+           devices -> users (user_id)
+           sessions -> devices (imei)
+           sessions -> service_types (service_type_id)
+           
+        5. ОГРАНИЧЕНИЯ СИСТЕМЫ:
            
            - Максимальный период запроса: 1 год
            - Максимальное количество записей: 10,000
            - Формат экспорта: только CSV
            - Язык интерфейса: только русский
            
-        4. БЕЗОПАСНОСТЬ:
+        6. БЕЗОПАСНОСТЬ:
            
            - Доступ только к данным своей компании
            - Автоматическое логирование действий
