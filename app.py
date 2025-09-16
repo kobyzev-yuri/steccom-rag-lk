@@ -602,7 +602,7 @@ def render_user_view():
     
     if st.session_state.get('rag_initialized'):
         st.sidebar.success("✅ RAG система активна")
-        else:
+    else:
         st.sidebar.warning("⚠️ RAG система недоступна")
     
     if st.session_state.get('kb_loaded_count', 0) > 0:
