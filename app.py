@@ -58,10 +58,16 @@ def initialize_session_state():
 
 def initialize_rag_system():
     """Initialize RAG system safely"""
+    print(f"🔍 DEBUG: initialize_rag_system вызвана, rag_initialized = {st.session_state.rag_initialized}")
+    
     if not st.session_state.rag_initialized:
         try:
+            print("🔍 DEBUG: Начинаем инициализацию RAG системы...")
+            print(f"🔍 DEBUG: RAG_HELPER_AVAILABLE = {RAG_HELPER_AVAILABLE}")
+            
             # Initialize RAG helper only if available
             if RAG_HELPER_AVAILABLE:
+                print("🔍 DEBUG: RAGHelper доступен, инициализируем...")
                 st.session_state.rag_helper = RAGHelper()
                 st.session_state.rag_initialized = True
                 print("✅ RAGHelper инициализирован")
@@ -72,26 +78,52 @@ def initialize_rag_system():
             
             # Try to initialize multi-KB RAG if available
             try:
-                from multi_kb_rag import MultiKBRAG
+                print("🔍 DEBUG: Пытаемся импортировать MultiKBRAG...")
+                print("🔍 DEBUG: Путь к модулю: modules.rag.multi_kb_rag")
+                
+                # Проверяем, существует ли файл
+                import os
+                module_path = "modules/rag/multi_kb_rag.py"
+                if os.path.exists(module_path):
+                    print(f"🔍 DEBUG: Файл {module_path} существует")
+                else:
+                    print(f"❌ DEBUG: Файл {module_path} НЕ существует!")
+                
+                from modules.rag.multi_kb_rag import MultiKBRAG
+                print("🔍 DEBUG: MultiKBRAG импортирован успешно, создаем экземпляр...")
                 st.session_state.multi_rag = MultiKBRAG()
                 
                 # Load available knowledge bases
+                print("🔍 DEBUG: Загружаем базы знаний...")
                 available_kbs = st.session_state.multi_rag.get_available_kbs()
                 st.session_state.kb_loaded_count = len(available_kbs)
                 st.session_state.loaded_kbs_info = available_kbs
                 print(f"✅ Multi-KB RAG инициализирован: {len(available_kbs)} БЗ")
                 
-            except (ImportError, Exception) as e:
+            except ImportError as e:
+                print(f"❌ DEBUG: ImportError при импорте MultiKBRAG: {e}")
+                print(f"🔍 DEBUG: Тип ошибки: {type(e)}")
+                st.session_state.multi_rag = None
+                st.session_state.kb_loaded_count = 0
+                st.session_state.loaded_kbs_info = []
+                print(f"⚠️ Multi-KB RAG недоступен: {e}")
+            except Exception as e:
+                print(f"❌ DEBUG: Exception при инициализации MultiKBRAG: {e}")
+                print(f"🔍 DEBUG: Тип ошибки: {type(e)}")
                 st.session_state.multi_rag = None
                 st.session_state.kb_loaded_count = 0
                 st.session_state.loaded_kbs_info = []
                 print(f"⚠️ Multi-KB RAG недоступен: {e}")
                 
         except Exception as e:
+            print(f"❌ DEBUG: Общая ошибка инициализации RAG: {e}")
+            print(f"🔍 DEBUG: Тип ошибки: {type(e)}")
             st.session_state.rag_initialized = False
             st.session_state.rag_helper = None
             st.session_state.multi_rag = None
             print(f"❌ Ошибка инициализации RAG: {e}")
+    else:
+        print("🔍 DEBUG: RAG система уже инициализирована, пропускаем")
 
 
 def login_page():

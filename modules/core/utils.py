@@ -18,11 +18,6 @@ def create_chart(df: pd.DataFrame, chart_type: str = "line") -> None:
         st.warning("Нет данных для построения графика")
         return
     
-    # Отладочная информация
-    st.write(f"🔍 Отладка: Тип графика: {chart_type}")
-    st.write(f"🔍 Отладка: Колонки в данных: {list(df.columns)}")
-    st.write(f"🔍 Отладка: Размер данных: {df.shape}")
-    
     try:
         if chart_type == "line" and 'total_usage' in df.columns:
             # Линейный график
@@ -132,7 +127,6 @@ def create_chart(df: pd.DataFrame, chart_type: str = "line") -> None:
             
     except Exception as e:
         st.error(f"Ошибка построения графика: {str(e)}")
-        st.write(f"🔍 Отладка ошибки: {e}")
 
 
 def display_query_results(query: str, params: Tuple = ()) -> None:
@@ -146,26 +140,10 @@ def display_query_results(query: str, params: Tuple = ()) -> None:
         else:
             st.dataframe(df)
             
-            # Download option - сразу после таблицы
-            if not df.empty:
-                csv = df.to_csv(index=False)
-                st.download_button(
-                    label="📥 Скачать CSV",
-                    data=csv,
-                    file_name=f"query_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                    mime="text/csv"
-                )
-            
-            # Chart section - отдельно от селектбокса
+            # Chart section
             if not df.empty:
                 st.markdown("### 📊 График")
-                
-                # Создаем уникальный ключ на основе времени и содержимого запроса
-                import time
-                unique_key = f"{int(time.time() * 1000)}_{hash(query)}_{len(query)}"
-                
-                # Селектбокс и кнопка в одной строке
-                col1, col2 = st.columns([2, 1])
+                col1, col2 = st.columns([3, 1])
                 
                 with col1:
                     chart_type = st.selectbox(
@@ -177,13 +155,22 @@ def display_query_results(query: str, params: Tuple = ()) -> None:
                             "pie": "🥧 Круговая диаграмма",
                             "scatter": "🔍 Точечная диаграмма"
                         }[x],
-                        key=f"chart_type_{unique_key}"
+                        key=f"chart_type_{hash(query)}"
                     )
                 
                 with col2:
-                    if st.button("Построить график", key=f"build_chart_{unique_key}"):
-                        # График строится на полную ширину под селектбоксом
+                    if st.button("Построить график", key=f"build_chart_{hash(query)}"):
                         create_chart(df, chart_type)
+            
+            # Download option
+            if not df.empty:
+                csv = df.to_csv(index=False)
+                st.download_button(
+                    label="📥 Скачать CSV",
+                    data=csv,
+                    file_name=f"query_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv"
+                )
     else:
         st.error("Unexpected query result format")
 

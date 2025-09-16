@@ -139,6 +139,11 @@ def render_standard_reports():
             if error:
                 st.error(f"Ошибка выполнения запроса: {error}")
             else:
+                # Сохраняем данные отчета в session_state
+                report_key = f"standard_report_{report_type}"
+                st.session_state[f"{report_key}_data"] = df
+                st.session_state[f"{report_key}_query"] = query
+                
                 st.markdown("#### Результаты отчета")
                 st.dataframe(df)
                 
@@ -152,16 +157,10 @@ def render_standard_reports():
                         mime="text/csv"
                     )
                 
-                # Chart section - отдельно от селектбокса
+                # Chart section
                 if not df.empty:
                     st.markdown("### 📊 График")
-                    
-                    # Создаем уникальный ключ на основе типа отчета и времени
-                    import time
-                    unique_key = f"standard_{report_type}_{int(time.time() * 1000)}"
-                    
-                    # Селектбокс и кнопка в одной строке
-                    col1, col2 = st.columns([2, 1])
+                    col1, col2 = st.columns([3, 1])
                     
                     with col1:
                         chart_type = st.selectbox(
@@ -173,12 +172,11 @@ def render_standard_reports():
                                 "pie": "🥧 Круговая диаграмма",
                                 "scatter": "🔍 Точечная диаграмма"
                             }[x],
-                            key=f"standard_chart_type_{unique_key}"
+                            key=f"standard_chart_type_{hash(report_type)}"
                         )
                     
                     with col2:
-                        if st.button("Построить график", key=f"build_standard_chart_{unique_key}"):
-                            # График строится на полную ширину под селектбоксом
+                        if st.button("Построить график", key=f"build_standard_chart_{hash(report_type)}"):
                             create_chart(df, chart_type)
 
 

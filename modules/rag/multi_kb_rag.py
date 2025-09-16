@@ -10,7 +10,13 @@ from typing import List, Dict, Optional, Tuple
 from pathlib import Path
 import numpy as np
 from langchain_community.embeddings import OllamaEmbeddings
-from langchain_huggingface import HuggingFaceEmbeddings
+try:
+    from langchain_huggingface import HuggingFaceEmbeddings
+    HUGGINGFACE_AVAILABLE = True
+except ImportError:
+    HUGGINGFACE_AVAILABLE = False
+    print("⚠️ HuggingFaceEmbeddings недоступен: langchain_huggingface не установлен")
+
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_community.chat_models import ChatOllama
@@ -31,14 +37,15 @@ class MultiKBRAG:
                  temperature: float = 0.2):
         self.db_path = db_path
         # Embeddings backend: default to multilingual HF model if configured
-        embedding_provider = os.getenv("EMBEDDING_PROVIDER", "hf").lower()
-        if embedding_provider in ("hf", "huggingface"):
+        embedding_provider = os.getenv("EMBEDDING_PROVIDER", "ollama").lower()
+        if embedding_provider in ("hf", "huggingface") and HUGGINGFACE_AVAILABLE:
             embedding_model = os.getenv("EMBEDDING_MODEL", "intfloat/multilingual-e5-base")
             self.embeddings = HuggingFaceEmbeddings(model_name=embedding_model, 
                                                     model_kwargs={"device": "cpu"},
                                                     encode_kwargs={"normalize_embeddings": True})
             self._embedding_backend = {"provider": "huggingface", "model": embedding_model}
         else:
+            # Используем Ollama по умолчанию
             self.embeddings = OllamaEmbeddings(model=os.getenv("OLLAMA_EMBED_MODEL", "all-minilm"))
             self._embedding_backend = {"provider": "ollama", "model": os.getenv("OLLAMA_EMBED_MODEL", "all-minilm")}
         # Resolve chat backend configuration (constructor overrides env)
