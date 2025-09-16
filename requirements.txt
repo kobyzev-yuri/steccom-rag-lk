@@ -14,3 +14,4 @@ PyMuPDF>=1.23.0
 sympy>=1.12 
 langchain-huggingface>=0.0.7
 sentence-transformers>=2.6.1
+plotly>=5.0.0
