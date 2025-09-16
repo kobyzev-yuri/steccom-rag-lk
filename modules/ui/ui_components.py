@@ -88,9 +88,11 @@ def render_standard_reports():
         st.session_state.current_report_type = report_type
     
     if st.button("Показать отчет", key="show_report"):
+        st.write(f"🔍 DEBUG: Кнопка 'Показать отчет' нажата для: {report_type}")
         with st.spinner("Загрузка отчета..."):
             # Determine user role for access control
             user_role = 'staff' if st.session_state.is_staff else 'user'
+            st.write(f"🔍 DEBUG: Роль пользователя: {user_role}")
             
             if report_type == "Текущий договор":
                 query = STANDARD_QUERIES["Current agreement"]
@@ -134,7 +136,9 @@ def render_standard_reports():
                 query = STANDARD_QUERIES["VSAT_VOICE sessions"]
             
             # Execute query
+            st.write(f"🔍 DEBUG: Выполняем запрос для компании: {st.session_state.company}")
             df, error = execute_query(query, (st.session_state.company,))
+            st.write(f"🔍 DEBUG: Результат запроса: {type(df)}, ошибка: {error}")
             
             if error:
                 st.error(f"Ошибка выполнения запроса: {error}")
@@ -144,8 +148,16 @@ def render_standard_reports():
                 st.session_state[f"{report_key}_data"] = df
                 st.session_state[f"{report_key}_query"] = query
                 
+                st.write(f"🔍 DEBUG: Данные получены: {df.shape}, колонки: {list(df.columns)}")
+                st.write(f"🔍 DEBUG: DataFrame пустой: {df.empty}")
+                st.write(f"🔍 DEBUG: Первые 3 строки:")
+                st.write(df.head(3))
+                
                 st.markdown("#### Результаты отчета")
-                st.dataframe(df)
+                if df.empty:
+                    st.warning("Нет данных для отображения")
+                else:
+                    st.table(df)
                 
                 # Download option - сразу после таблицы
                 if not df.empty:
@@ -160,6 +172,10 @@ def render_standard_reports():
                 # Chart section
                 if not df.empty:
                     st.markdown("### 📊 График")
+                    
+                    # Создаем уникальный ключ для этого отчета
+                    chart_key = f"chart_{hash(report_type)}"
+                    
                     col1, col2 = st.columns([3, 1])
                     
                     with col1:
@@ -172,12 +188,32 @@ def render_standard_reports():
                                 "pie": "🥧 Круговая диаграмма",
                                 "scatter": "🔍 Точечная диаграмма"
                             }[x],
-                            key=f"standard_chart_type_{hash(report_type)}"
+                            key=f"standard_chart_type_{chart_key}"
                         )
                     
                     with col2:
-                        if st.button("Построить график", key=f"build_standard_chart_{hash(report_type)}"):
-                            create_chart(df, chart_type)
+                        if st.button("Построить график", key=f"build_standard_chart_{chart_key}"):
+                            st.write(f"🔍 DEBUG: Кнопка 'Построить график' нажата для отчета: {report_type}")
+                            st.write(f"🔍 DEBUG: Тип графика: {chart_type}")
+                            st.write(f"🔍 DEBUG: Данные: {df.shape}, колонки: {list(df.columns)}")
+                            
+                            # Сохраняем данные и тип графика в session_state
+                            st.session_state[f"chart_data_{chart_key}"] = df
+                            st.session_state[f"chart_type_{chart_key}"] = chart_type
+                            st.session_state[f"show_chart_{chart_key}"] = True
+                    
+                    # Показываем график если он был запрошен
+                    if st.session_state.get(f"show_chart_{chart_key}", False):
+                        saved_df = st.session_state.get(f"chart_data_{chart_key}")
+                        saved_chart_type = st.session_state.get(f"chart_type_{chart_key}")
+                        
+                        if saved_df is not None:
+                            st.write(f"🔍 DEBUG: Отображаем сохраненный график типа: {saved_chart_type}")
+                            create_chart(saved_df, saved_chart_type)
+                            
+                            # Кнопка для скрытия графика
+                            if st.button("Скрыть график", key=f"hide_chart_{chart_key}"):
+                                st.session_state[f"show_chart_{chart_key}"] = False
 
 
 def render_custom_query():

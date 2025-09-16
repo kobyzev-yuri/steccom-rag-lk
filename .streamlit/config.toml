@@ -8,6 +8,11 @@ port = 8501
 headless = true
 maxUploadSize = 200
 
+[logger]
+# Logging configuration
+level = "info"
+messageFormat = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
 [browser]
 # Disable automatic browser opening
 gatherUsageStats = false

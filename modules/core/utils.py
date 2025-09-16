@@ -9,11 +9,26 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
 from typing import Tuple, Optional
+import logging
 from .database import execute_query
+
+# Настройка логирования
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def create_chart(df: pd.DataFrame, chart_type: str = "line") -> None:
     """Создает график на основе данных DataFrame"""
+    logger.info(f"create_chart вызвана с типом: {chart_type}")
+    logger.info(f"DataFrame пустой: {df.empty}")
+    logger.info(f"Колонки: {list(df.columns)}")
+    logger.info(f"Размер: {df.shape}")
+    
+    st.write(f"🔍 DEBUG: create_chart вызвана с типом: {chart_type}")
+    st.write(f"🔍 DEBUG: DataFrame пустой: {df.empty}")
+    st.write(f"🔍 DEBUG: Колонки: {list(df.columns)}")
+    st.write(f"🔍 DEBUG: Размер: {df.shape}")
+    
     if df.empty:
         st.warning("Нет данных для построения графика")
         return
@@ -131,6 +146,9 @@ def create_chart(df: pd.DataFrame, chart_type: str = "line") -> None:
 
 def display_query_results(query: str, params: Tuple = ()) -> None:
     """Helper function to display query results with charts."""
+    logger.info(f"display_query_results вызвана с запросом: {query[:50]}...")
+    st.write(f"🔍 DEBUG: display_query_results вызвана")
+    
     results = execute_query(query, params)
     
     if isinstance(results, tuple) and len(results) == 2:
@@ -155,11 +173,17 @@ def display_query_results(query: str, params: Tuple = ()) -> None:
                             "pie": "🥧 Круговая диаграмма",
                             "scatter": "🔍 Точечная диаграмма"
                         }[x],
-                        key=f"chart_type_{hash(query)}"
+                        key=f"chart_type_{hash(query)}_{len(query)}"
                     )
                 
                 with col2:
-                    if st.button("Построить график", key=f"build_chart_{hash(query)}"):
+                    if st.button("Построить график", key=f"build_chart_{hash(query)}_{len(query)}"):
+                        logger.info(f"Кнопка 'Построить график' нажата для запроса: {query[:50]}...")
+                        logger.info(f"Тип графика: {chart_type}")
+                        logger.info(f"Данные: {df.shape}, колонки: {list(df.columns)}")
+                        
+                        st.write(f"🔍 Отладка: Строим график типа {chart_type}")
+                        st.write(f"🔍 Отладка: Данные: {df.shape}, колонки: {list(df.columns)}")
                         create_chart(df, chart_type)
             
             # Download option
