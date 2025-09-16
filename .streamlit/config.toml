@@ -1,0 +1,19 @@
+[global]
+# Disable caching to prevent cache-related issues
+developmentMode = true
+
+[server]
+# Reduce memory usage
+maxUploadSize = 200
+
+[browser]
+# Disable automatic browser opening
+gatherUsageStats = false
+
+[theme]
+# Default theme
+primaryColor = "#1f77b4"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f0f2f6"
+textColor = "#262730"
+
