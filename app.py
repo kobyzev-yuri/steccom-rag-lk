@@ -416,6 +416,66 @@ STANDARD_QUERIES = {
     AND st.name = 'SBD'
     GROUP BY strftime('%Y-%m', b.billing_date), st.name, st.unit
     ORDER BY month DESC;
+    """,
+    
+    "VSAT_DATA monthly traffic": """
+    SELECT 
+        strftime('%Y-%m', b.billing_date) as month,
+        st.name as service_type,
+        st.unit as unit,
+        SUM(b.usage_amount) as total_usage,
+        ROUND(SUM(b.amount), 2) as total_amount,
+        COUNT(DISTINCT b.imei) as active_devices
+    FROM billing_records b
+    JOIN agreements a ON b.agreement_id = a.id
+    JOIN users u ON a.user_id = u.id
+    JOIN service_types st ON b.service_type_id = st.id
+    WHERE u.company = ?
+    AND st.name = 'VSAT_DATA'
+    GROUP BY strftime('%Y-%m', b.billing_date), st.name, st.unit
+    ORDER BY month DESC;
+    """,
+    
+    "SBD sessions": """
+    SELECT 
+        s.imei as device_id,
+        d.device_type,
+        d.model,
+        st.name as service_type,
+        st.unit as unit,
+        s.session_start as start_time,
+        s.session_end as end_time,
+        s.usage_amount as usage_amount,
+        ROUND((julianday(s.session_end) - julianday(s.session_start)) * 24 * 60, 2) as duration_minutes
+    FROM sessions s
+    JOIN devices d ON s.imei = d.imei
+    JOIN users u ON d.user_id = u.id
+    JOIN service_types st ON s.service_type_id = st.id
+    WHERE u.company = ?
+    AND st.name = 'SBD'
+    ORDER BY s.session_start DESC
+    LIMIT 100;
+    """,
+    
+    "VSAT_DATA sessions": """
+    SELECT 
+        s.imei as device_id,
+        d.device_type,
+        d.model,
+        st.name as service_type,
+        st.unit as unit,
+        s.session_start as start_time,
+        s.session_end as end_time,
+        s.usage_amount as usage_amount,
+        ROUND((julianday(s.session_end) - julianday(s.session_start)) * 24 * 60, 2) as duration_minutes
+    FROM sessions s
+    JOIN devices d ON s.imei = d.imei
+    JOIN users u ON d.user_id = u.id
+    JOIN service_types st ON s.service_type_id = st.id
+    WHERE u.company = ?
+    AND st.name = 'VSAT_DATA'
+    ORDER BY s.session_start DESC
+    LIMIT 100;
     """
 }
 
@@ -658,10 +718,13 @@ def render_standard_reports():
             "Использование за текущий месяц",
             "Сессии за последние 30 дней",
             "Статистика по типам услуг",
-            "Помесячный SBD трафик"
+            "Помесячный SBD трафик",
+            "Помесячный VSAT_DATA трафик",
+            "SBD сессии",
+            "VSAT_DATA сессии"
         ],
         index=["Текущий договор", "Список устройств", "Трафик за месяц", 
-               "Использование за текущий месяц", "Сессии за последние 30 дней", "Статистика по типам услуг", "Помесячный SBD трафик"].index(st.session_state.current_report_type),
+               "Использование за текущий месяц", "Сессии за последние 30 дней", "Статистика по типам услуг", "Помесячный SBD трафик", "Помесячный VSAT_DATA трафик", "SBD сессии", "VSAT_DATA сессии"].index(st.session_state.current_report_type),
         key="report_type"
     )
     
@@ -703,6 +766,12 @@ def render_standard_reports():
                 """
             elif report_type == "Помесячный SBD трафик":
                 query = STANDARD_QUERIES["SBD monthly traffic"]
+            elif report_type == "Помесячный VSAT_DATA трафик":
+                query = STANDARD_QUERIES["VSAT_DATA monthly traffic"]
+            elif report_type == "SBD сессии":
+                query = STANDARD_QUERIES["SBD sessions"]
+            elif report_type == "VSAT_DATA сессии":
+                query = STANDARD_QUERIES["VSAT_DATA sessions"]
             
             # Apply role-based access control
             if user_role == 'staff':
@@ -1035,7 +1104,10 @@ def render_staff_view():
                 "Использование по типам услуг",
                 "Сессии всех пользователей",
                 "Статистика по тарифам",
-                "SBD трафик по компаниям"
+                "SBD трафик по компаниям",
+                "VSAT_DATA трафик по компаниям",
+                "SBD сессии по компаниям",
+                "VSAT_DATA сессии по компаниям"
             ],
             key="admin_report_type"
         )
@@ -1168,6 +1240,66 @@ def render_staff_view():
                     WHERE st.name = 'SBD'
                     GROUP BY u.company, strftime('%Y-%m', b.billing_date), st.name, st.unit
                     ORDER BY u.company, month DESC
+                    """
+                elif admin_report_type == "VSAT_DATA трафик по компаниям":
+                    query = """
+                    SELECT 
+                        u.company,
+                        strftime('%Y-%m', b.billing_date) as month,
+                        st.name as service_type,
+                        st.unit as unit,
+                        SUM(b.usage_amount) as total_usage,
+                        ROUND(SUM(b.amount), 2) as total_amount,
+                        COUNT(DISTINCT b.imei) as active_devices
+                    FROM billing_records b
+                    JOIN agreements a ON b.agreement_id = a.id
+                    JOIN users u ON a.user_id = u.id
+                    JOIN service_types st ON b.service_type_id = st.id
+                    WHERE st.name = 'VSAT_DATA'
+                    GROUP BY u.company, strftime('%Y-%m', b.billing_date), st.name, st.unit
+                    ORDER BY u.company, month DESC
+                    """
+                elif admin_report_type == "SBD сессии по компаниям":
+                    query = """
+                    SELECT 
+                        u.company,
+                        s.imei as device_id,
+                        d.device_type,
+                        d.model,
+                        st.name as service_type,
+                        st.unit as unit,
+                        s.session_start as start_time,
+                        s.session_end as end_time,
+                        s.usage_amount as usage_amount,
+                        ROUND((julianday(s.session_end) - julianday(s.session_start)) * 24 * 60, 2) as duration_minutes
+                    FROM sessions s
+                    JOIN devices d ON s.imei = d.imei
+                    JOIN users u ON d.user_id = u.id
+                    JOIN service_types st ON s.service_type_id = st.id
+                    WHERE st.name = 'SBD'
+                    ORDER BY u.company, s.session_start DESC
+                    LIMIT 200
+                    """
+                elif admin_report_type == "VSAT_DATA сессии по компаниям":
+                    query = """
+                    SELECT 
+                        u.company,
+                        s.imei as device_id,
+                        d.device_type,
+                        d.model,
+                        st.name as service_type,
+                        st.unit as unit,
+                        s.session_start as start_time,
+                        s.session_end as end_time,
+                        s.usage_amount as usage_amount,
+                        ROUND((julianday(s.session_end) - julianday(s.session_start)) * 24 * 60, 2) as duration_minutes
+                    FROM sessions s
+                    JOIN devices d ON s.imei = d.imei
+                    JOIN users u ON d.user_id = u.id
+                    JOIN service_types st ON s.service_type_id = st.id
+                    WHERE st.name = 'VSAT_DATA'
+                    ORDER BY u.company, s.session_start DESC
+                    LIMIT 200
                     """
                 
                 results = execute_query(query)
