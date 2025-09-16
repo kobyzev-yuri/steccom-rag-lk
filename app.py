@@ -398,6 +398,24 @@ STANDARD_QUERIES = {
     AND date(s.session_start) >= date('now', '-30 days')
     ORDER BY s.session_start DESC
     LIMIT 100;
+    """,
+    
+    "SBD monthly traffic": """
+    SELECT 
+        strftime('%Y-%m', b.billing_date) as month,
+        st.name as service_type,
+        st.unit as unit,
+        SUM(b.usage_amount) as total_usage,
+        ROUND(SUM(b.amount), 2) as total_amount,
+        COUNT(DISTINCT b.imei) as active_devices
+    FROM billing_records b
+    JOIN agreements a ON b.agreement_id = a.id
+    JOIN users u ON a.user_id = u.id
+    JOIN service_types st ON b.service_type_id = st.id
+    WHERE u.company = ?
+    AND st.name = 'SBD'
+    GROUP BY strftime('%Y-%m', b.billing_date), st.name, st.unit
+    ORDER BY month DESC;
     """
 }
 
@@ -639,10 +657,11 @@ def render_standard_reports():
             "Трафик за месяц",
             "Использование за текущий месяц",
             "Сессии за последние 30 дней",
-            "Статистика по типам услуг"
+            "Статистика по типам услуг",
+            "Помесячный SBD трафик"
         ],
         index=["Текущий договор", "Список устройств", "Трафик за месяц", 
-               "Использование за текущий месяц", "Сессии за последние 30 дней", "Статистика по типам услуг"].index(st.session_state.current_report_type),
+               "Использование за текущий месяц", "Сессии за последние 30 дней", "Статистика по типам услуг", "Помесячный SBD трафик"].index(st.session_state.current_report_type),
         key="report_type"
     )
     
@@ -682,6 +701,8 @@ def render_standard_reports():
                 GROUP BY st.name, st.unit
                 ORDER BY total_usage DESC
                 """
+            elif report_type == "Помесячный SBD трафик":
+                query = STANDARD_QUERIES["SBD monthly traffic"]
             
             # Apply role-based access control
             if user_role == 'staff':
@@ -1013,7 +1034,8 @@ def render_staff_view():
                 "Трафик по компаниям",
                 "Использование по типам услуг",
                 "Сессии всех пользователей",
-                "Статистика по тарифам"
+                "Статистика по тарифам",
+                "SBD трафик по компаниям"
             ],
             key="admin_report_type"
         )
@@ -1128,6 +1150,24 @@ def render_staff_view():
                     WHERE t.is_active = 1
                     GROUP BY t.id, t.name, st.name, st.unit
                     ORDER BY active_agreements DESC
+                    """
+                elif admin_report_type == "SBD трафик по компаниям":
+                    query = """
+                    SELECT 
+                        u.company,
+                        strftime('%Y-%m', b.billing_date) as month,
+                        st.name as service_type,
+                        st.unit as unit,
+                        SUM(b.usage_amount) as total_usage,
+                        ROUND(SUM(b.amount), 2) as total_amount,
+                        COUNT(DISTINCT b.imei) as active_devices
+                    FROM billing_records b
+                    JOIN agreements a ON b.agreement_id = a.id
+                    JOIN users u ON a.user_id = u.id
+                    JOIN service_types st ON b.service_type_id = st.id
+                    WHERE st.name = 'SBD'
+                    GROUP BY u.company, strftime('%Y-%m', b.billing_date), st.name, st.unit
+                    ORDER BY u.company, month DESC
                     """
                 
                 results = execute_query(query)
