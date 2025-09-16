@@ -381,7 +381,10 @@ STANDARD_QUERIES = {
     
     "Service sessions": """
     SELECT 
+        u.company,
         s.imei as device_id,
+        d.device_type,
+        d.model,
         st.name as service_type,
         st.unit as unit,
         s.session_start as start_time,
@@ -410,7 +413,7 @@ def execute_standard_query(query_name: str, company: str, user_role: str = 'user
             df = pd.read_sql_query(query, conn)
         else:
             # Regular users see only their company data
-            df = pd.read_sql_query(STANDARD_QUERIES[query_name], conn, params=(company,))
+        df = pd.read_sql_query(STANDARD_QUERIES[query_name], conn, params=(company,))
         
         return df, None
     except Exception as e:
@@ -599,7 +602,7 @@ def render_user_view():
     
     if st.session_state.get('rag_initialized'):
         st.sidebar.success("✅ RAG система активна")
-    else:
+        else:
         st.sidebar.warning("⚠️ RAG система недоступна")
     
     if st.session_state.get('kb_loaded_count', 0) > 0:
@@ -626,56 +629,56 @@ def render_user_view():
 def render_standard_reports():
     st.subheader("📊 Стандартные отчеты")
     st.write("Выберите готовый отчет из списка ниже:")
-    
-    # Use session_state for report type
-    report_type = st.selectbox(
-        "Тип отчета:",
-        [
-            "Текущий договор",
-            "Список устройств",
-            "Трафик за месяц",
+        
+        # Use session_state for report type
+        report_type = st.selectbox(
+            "Тип отчета:",
+            [
+                "Текущий договор",
+                "Список устройств",
+                "Трафик за месяц",
             "Использование за текущий месяц",
             "Сессии за последние 30 дней",
             "Статистика по типам услуг"
-        ],
+            ],
         index=["Текущий договор", "Список устройств", "Трафик за месяц", 
                "Использование за текущий месяц", "Сессии за последние 30 дней", "Статистика по типам услуг"].index(st.session_state.current_report_type),
-        key="report_type"
-    )
-    
-    # Update session_state when report type changes
-    if report_type != st.session_state.current_report_type:
-        st.session_state.current_report_type = report_type
-    
+            key="report_type"
+        )
+        
+        # Update session_state when report type changes
+        if report_type != st.session_state.current_report_type:
+            st.session_state.current_report_type = report_type
+        
     if st.button("Показать отчет", key="show_report"):
-        with st.spinner("Загрузка отчета..."):
+            with st.spinner("Загрузка отчета..."):
             # Determine user role for access control
             user_role = 'staff' if st.session_state.is_staff else 'user'
             
-            if report_type == "Текущий договор":
+                if report_type == "Текущий договор":
                 query = STANDARD_QUERIES["Current agreement"]
-            elif report_type == "Список устройств":
+                elif report_type == "Список устройств":
                 query = STANDARD_QUERIES["My devices"]
-            elif report_type == "Трафик за месяц":
+                elif report_type == "Трафик за месяц":
                 query = STANDARD_QUERIES["My monthly traffic"]
             elif report_type == "Использование за текущий месяц":
                 query = STANDARD_QUERIES["Current month usage"]
             elif report_type == "Сессии за последние 30 дней":
                 query = STANDARD_QUERIES["Service sessions"]
             elif report_type == "Статистика по типам услуг":
-                query = """
-                SELECT 
+                    query = """
+                    SELECT 
                     st.name as service_type,
                     st.unit as unit,
                     COUNT(DISTINCT d.imei) as device_count,
                     SUM(b.usage_amount) as total_usage,
                     ROUND(SUM(b.amount), 2) as total_amount,
                     ROUND(AVG(b.usage_amount), 2) as avg_usage_per_record
-                FROM billing_records b
-                JOIN devices d ON b.imei = d.imei
-                JOIN users u ON d.user_id = u.id
+                    FROM billing_records b
+                    JOIN devices d ON b.imei = d.imei
+                    JOIN users u ON d.user_id = u.id
                 JOIN service_types st ON b.service_type_id = st.id
-                WHERE u.company = ?
+                    WHERE u.company = ?
                 GROUP BY st.name, st.unit
                 ORDER BY total_usage DESC
                 """
@@ -690,35 +693,35 @@ def render_standard_reports():
                 results = execute_query(query, params=(st.session_state.company,))
             
             # Store results in session_state
-            st.session_state.current_query_results = results
-            st.session_state.current_sql_query = query
-            st.session_state.current_query_explanation = f"Результаты отчета: {report_type}"
-    
-    # Display stored results if available
-    if st.session_state.current_query_results:
-        df, error = st.session_state.current_query_results
-        if error:
-            st.error(f"Ошибка выполнения запроса: {error}")
-        else:
-            st.markdown("#### Результаты отчета")
-            st.dataframe(df)
-            
-            # Download option
-            if not df.empty:
-                csv = df.to_csv(index=False)
-                st.download_button(
-                    label="Скачать результаты как CSV",
-                    data=csv,
-                    file_name=f"report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                    mime="text/csv"
-                )
+                st.session_state.current_query_results = results
+                st.session_state.current_sql_query = query
+                st.session_state.current_query_explanation = f"Результаты отчета: {report_type}"
+        
+        # Display stored results if available
+        if st.session_state.current_query_results:
+            df, error = st.session_state.current_query_results
+            if error:
+                st.error(f"Ошибка выполнения запроса: {error}")
+            else:
+                st.markdown("#### Результаты отчета")
+                st.dataframe(df)
+                
+                # Download option
+                if not df.empty:
+                    csv = df.to_csv(index=False)
+                    st.download_button(
+                        label="Скачать результаты как CSV",
+                        data=csv,
+                        file_name=f"report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv"
+                    )
 def render_custom_query():
     st.subheader("📝 Пользовательский запрос")
     st.write("Задайте вопрос на русском языке, и система создаст SQL-запрос для анализа ваших данных.")
-    
-    # Show example questions
+        
+        # Show example questions
     with st.expander("💡 Примеры вопросов"):
-        st.markdown("""
+            st.markdown("""
         **📊 Аналитика:**
         - Покажи статистику трафика за последний месяц
         - Какие устройства потребляют больше всего трафика?
@@ -733,24 +736,24 @@ def render_custom_query():
         - Покажи технические регламенты
         - Какие стандарты безопасности?
         - Процедуры настройки оборудования
-        """)
-    
-    # Use session_state for user question
-    user_question = st.text_area(
+            """)
+        
+        # Use session_state for user question
+        user_question = st.text_area(
         "💬 Задайте ваш вопрос:",
-        value=st.session_state.current_user_question,
-        placeholder="Например: Покажи статистику трафика за последнюю неделю",
-        height=100,
-        key="user_question"
-    )
-    
-    # Update session_state when question changes
-    if user_question != st.session_state.current_user_question:
-        st.session_state.current_user_question = user_question
-    
+            value=st.session_state.current_user_question,
+            placeholder="Например: Покажи статистику трафика за последнюю неделю",
+            height=100,
+            key="user_question"
+        )
+        
+        # Update session_state when question changes
+        if user_question != st.session_state.current_user_question:
+            st.session_state.current_user_question = user_question
+        
     if st.button("Создать запрос", key="create_query"):
-        if user_question:
-            with st.spinner("Генерирую запрос..."):
+            if user_question:
+                with st.spinner("Генерирую запрос..."):
                 # Try to use multi-KB RAG first for enhanced context
                 if st.session_state.get('multi_rag') and st.session_state.multi_rag.get_available_kbs():
                     # Use multi-KB RAG for enhanced context
@@ -765,52 +768,52 @@ def render_custom_query():
                         st.markdown("---")
                 
                 # Generate SQL query
-                query, explanation = st.session_state.rag_helper.get_query_suggestion(
-                    user_question, st.session_state.company
-                )
-                if query:
-                    # Store results in session_state
-                    st.session_state.current_sql_query = query
-                    st.session_state.current_query_explanation = explanation
-                    st.session_state.current_query_results = execute_query(query)
-                    
-                    st.markdown("#### Объяснение запроса")
-                    st.info(explanation)
-                    st.markdown("#### SQL Запрос")
-                    st.code(query, language="sql")
-                    st.markdown("#### Результаты")
-                    display_query_results(query)
-                else:
-                    st.error("Не удалось сгенерировать запрос. Попробуйте переформулировать вопрос.")
-        else:
-            st.warning("Пожалуйста, введите ваш вопрос.")
-    
-    # Display stored results if available
-    if st.session_state.current_query_explanation and st.session_state.current_sql_query:
-        st.markdown("#### Последний запрос")
-        st.markdown("**Объяснение запроса**")
-        st.info(st.session_state.current_query_explanation)
-        st.markdown("**SQL Запрос**")
-        st.code(st.session_state.current_sql_query, language="sql")
-        
-        if st.session_state.current_query_results:
-            df, error = st.session_state.current_query_results
-            if error:
-                st.error(f"Ошибка выполнения запроса: {error}")
-            else:
-                st.markdown("**Результаты**")
-                st.dataframe(df)
-                
-                # Download option
-                if not df.empty:
-                    csv = df.to_csv(index=False)
-                    st.download_button(
-                        label="Скачать результаты как CSV",
-                        data=csv,
-                        file_name=f"query_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                        mime="text/csv"
+                    query, explanation = st.session_state.rag_helper.get_query_suggestion(
+                        user_question, st.session_state.company
                     )
-
+                    if query:
+                        # Store results in session_state
+                        st.session_state.current_sql_query = query
+                        st.session_state.current_query_explanation = explanation
+                        st.session_state.current_query_results = execute_query(query)
+                        
+                        st.markdown("#### Объяснение запроса")
+                        st.info(explanation)
+                        st.markdown("#### SQL Запрос")
+                        st.code(query, language="sql")
+                        st.markdown("#### Результаты")
+                        display_query_results(query)
+                    else:
+                        st.error("Не удалось сгенерировать запрос. Попробуйте переформулировать вопрос.")
+            else:
+                st.warning("Пожалуйста, введите ваш вопрос.")
+        
+        # Display stored results if available
+        if st.session_state.current_query_explanation and st.session_state.current_sql_query:
+            st.markdown("#### Последний запрос")
+            st.markdown("**Объяснение запроса**")
+            st.info(st.session_state.current_query_explanation)
+            st.markdown("**SQL Запрос**")
+            st.code(st.session_state.current_sql_query, language="sql")
+            
+            if st.session_state.current_query_results:
+                df, error = st.session_state.current_query_results
+                if error:
+                    st.error(f"Ошибка выполнения запроса: {error}")
+                else:
+                    st.markdown("**Результаты**")
+                    st.dataframe(df)
+                    
+                    # Download option
+                    if not df.empty:
+                        csv = df.to_csv(index=False)
+                        st.download_button(
+                            label="Скачать результаты как CSV",
+                            data=csv,
+                            file_name=f"query_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime="text/csv"
+                        )
+    
 def render_smart_assistant():
     st.subheader("🤖 Умный помощник")
     st.write("Задайте вопрос по документации, техническим требованиям или работе с системой.")
@@ -915,32 +918,32 @@ def render_smart_assistant():
 
 def render_help():
     st.subheader("❓ Помощь")
-    st.markdown("""
-    ### Как пользоваться личным кабинетом
-    
-    #### 1. Стандартные отчеты
-    - Выберите готовый отчет из списка
-    - Нажмите "Показать отчет"
-    - Результаты можно скачать в формате CSV
-    
-    #### 2. Пользовательские запросы
-    - Задайте вопрос на русском языке
-    - Система создаст SQL-запрос и покажет результаты
-    - Используйте примеры для подсказки
-    
+        st.markdown("""
+        ### Как пользоваться личным кабинетом
+        
+        #### 1. Стандартные отчеты
+        - Выберите готовый отчет из списка
+        - Нажмите "Показать отчет"
+        - Результаты можно скачать в формате CSV
+        
+        #### 2. Пользовательские запросы
+        - Задайте вопрос на русском языке
+        - Система создаст SQL-запрос и покажет результаты
+        - Используйте примеры для подсказки
+        
     #### 3. Умный помощник
     - Задавайте вопросы по документации и техническим требованиям
     - Система найдет релевантную информацию в базах знаний
     - Показывает источники информации
     
     #### 4. Ограничения
-    - Доступны только данные вашей компании
-    - Некоторые сложные запросы могут требовать уточнения
-    - При ошибках попробуйте переформулировать вопрос
-    """)
-    
-    if st.button("Показать подробную справку"):
-        with st.spinner("Загружаю справку..."):
+        - Доступны только данные вашей компании
+        - Некоторые сложные запросы могут требовать уточнения
+        - При ошибках попробуйте переформулировать вопрос
+        """)
+        
+        if st.button("Показать подробную справку"):
+            with st.spinner("Загружаю справку..."):
             if st.session_state.rag_helper:
                 help_text = st.session_state.rag_helper.get_response("Как пользоваться личным кабинетом?")
                 st.markdown(help_text)
@@ -954,48 +957,48 @@ def render_staff_view():
     tab1, tab2, tab3 = st.tabs(["📊 Аналитика трафика", "📋 Стандартные отчеты", "🔧 Админ-панель"])
     
     with tab1:
-        # Company selector
-        companies_query = "SELECT DISTINCT company FROM users WHERE role = 'user' ORDER BY company"
-        conn = sqlite3.connect('satellite_billing.db')
-        df = pd.read_sql_query(companies_query, conn)
-        conn.close()
-        
-        selected_company = st.selectbox("Select Company:", ["All Companies"] + df['company'].tolist())
-        
-        # AI Query Assistant
-        st.header("AI Query Assistant")
-        user_question = st.text_area(
-            "Ask a question:",
-            help="Example: 'Show me total traffic per company in the last month' or 'List all active devices'"
-        )
-        
-        if st.button("Generate Query"):
-            with st.spinner("Generating query..."):
-                company = None if selected_company == "All Companies" else selected_company
-                query = generate_sql(user_question, company)
-                results = execute_query(query)
-                
-                # Show query
-                with st.expander("Show SQL Query"):
-                    st.code(query, language="sql")
-                
-                # Show results
-                if isinstance(results, tuple) and len(results) == 2:
-                    df, error = results
-                    if error:
-                        st.error(f"Error executing query: {error}")
-                    else:
-                        st.dataframe(df)
-                        
-                        # Download option
-                        if not df.empty:
-                            csv = df.to_csv(index=False)
-                            st.download_button(
-                                label="Download results as CSV",
-                                data=csv,
-                                file_name=f"query_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                                mime="text/csv"
-                            )
+    # Company selector
+    companies_query = "SELECT DISTINCT company FROM users WHERE role = 'user' ORDER BY company"
+    conn = sqlite3.connect('satellite_billing.db')
+    df = pd.read_sql_query(companies_query, conn)
+    conn.close()
+    
+    selected_company = st.selectbox("Select Company:", ["All Companies"] + df['company'].tolist())
+    
+    # AI Query Assistant
+    st.header("AI Query Assistant")
+    user_question = st.text_area(
+        "Ask a question:",
+        help="Example: 'Show me total traffic per company in the last month' or 'List all active devices'"
+    )
+    
+    if st.button("Generate Query"):
+        with st.spinner("Generating query..."):
+            company = None if selected_company == "All Companies" else selected_company
+            query = generate_sql(user_question, company)
+            results = execute_query(query)
+            
+            # Show query
+            with st.expander("Show SQL Query"):
+                st.code(query, language="sql")
+            
+            # Show results
+            if isinstance(results, tuple) and len(results) == 2:
+                df, error = results
+                if error:
+                    st.error(f"Error executing query: {error}")
+                else:
+                    st.dataframe(df)
+                    
+                    # Download option
+                    if not df.empty:
+                        csv = df.to_csv(index=False)
+                        st.download_button(
+                            label="Download results as CSV",
+                            data=csv,
+                            file_name=f"query_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime="text/csv"
+                        )
     
     with tab2:
         st.subheader("📋 Стандартные отчеты (все компании)")
@@ -1194,7 +1197,7 @@ def main():
     if 'multi_rag' not in st.session_state and MULTI_RAG_AVAILABLE:
         try:
             st.session_state.multi_rag = MultiKBRAG()
-            # Auto-load all active knowledge bases silently
+            # Auto-load all active knowledge bases silently for all users
             loaded_count = st.session_state.multi_rag.load_all_active_kbs()
             # Store the count for later display
             st.session_state.kb_loaded_count = loaded_count
@@ -1258,7 +1261,7 @@ def main():
             if view_choice == "🏠 Личный кабинет":
                 render_user_view()
             else:
-                render_staff_view()
+            render_staff_view()
         else:
             render_user_view()
 
