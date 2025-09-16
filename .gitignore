@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.env
+.venv/
+venv/
+ENV/
+*.egg-info/
+.eggs/
+
+# IDE/Editor
+.vscode/
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Streamlit
+.streamlit/cache/
+.streamlit/secrets.toml
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Logs
+logs/
+*.log
+
+# Data & Artifacts
+satellite_billing.db
+**/data/uploads/**
+**/data/tmp/**
+
+# FAISS indexes (if exported)
+**/*.faiss
+**/*.index
+
+# Cache
+.cache/
+.huggingface/
+
+# Compiled
+build/
+dist/
+
+# Secrets
+*.key
+*.pem
+*.crt
