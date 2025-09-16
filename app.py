@@ -319,7 +319,7 @@ def init_db():
         created_at TEXT NOT NULL,
         FOREIGN KEY (kb_id) REFERENCES knowledge_bases(id)
     );
-    ''')
+            ''')
     
     conn.commit()
     conn.close()
@@ -629,6 +629,9 @@ def get_database_schema() -> str:
 
 def generate_sql(question: str, company: Optional[str] = None) -> str:
     """Generate SQL query from natural language question."""
+    # DEBUG: Print the original question
+    print(f"🔍 DEBUG: Original question: '{question}'")
+    
     # Add company context if provided
     company_context = f"for the company '{company}'" if company else "across all companies"
     
@@ -636,6 +639,16 @@ def generate_sql(question: str, company: Optional[str] = None) -> str:
     schema = get_database_schema()
     
     prompt = f"""You are a SQLite expert for a satellite communications billing system. Generate a query for the following question {company_context}.
+
+CRITICAL RULES - DO NOT VIOLATE:
+1. NEVER modify, simplify, or shorten the user's question
+2. If user mentions "SBD" - ALWAYS filter by service_type = 'SBD'
+3. If user mentions "by each device" or "per device" - ALWAYS include device details in SELECT and GROUP BY
+4. If user mentions specific month (like "май" = May) - ALWAYS filter by that month
+5. Preserve EVERY detail from the original question
+6. Do NOT make assumptions or "improvements" to the user's request
+7. If you need to interpret the question, add a comment in SQL explaining your understanding
+8. NEVER change the user's intent - only translate it to SQL
 
 {schema}
 
@@ -678,23 +691,89 @@ WHERE date(b.billing_date) >= date('now', '-3 months')
 GROUP BY strftime('%Y-%m', b.billing_date), u.company, st.name, st.unit
 ORDER BY month DESC, total_usage DESC;
 
+Example Query - SBD traffic by each device for May 2025 (EXACTLY as user requested):
+-- User asked for: "SBD трафик за май месяц по каждому устройству"
+-- Understanding: Show SBD traffic for May 2025, grouped by each device
+-- Preserving: SBD filter, May 2025 filter, device grouping
+SELECT 
+    d.imei as device_id,
+    d.device_type,
+    d.model,
+    st.name as service_type,
+    st.unit as unit,
+    SUM(b.usage_amount) as total_usage,
+    ROUND(SUM(b.amount), 2) as total_amount
+FROM billing_records b
+JOIN devices d ON b.imei = d.imei
+JOIN users u ON d.user_id = u.id
+JOIN service_types st ON b.service_type_id = st.id
+WHERE u.company = '{company}'
+    AND st.name = 'SBD'  -- User specifically asked for SBD
+    AND strftime('%Y-%m', b.billing_date) = '2025-05'  -- User asked for May
+GROUP BY d.imei, d.device_type, d.model, st.name, st.unit  -- User asked "by each device"
+ORDER BY total_usage DESC;
+
+REMEMBER: If user asks for "SBD трафик за май месяц по каждому устройству" - this EXACTLY means:
+- Filter by service_type = 'SBD' 
+- Filter by month = '2025-05'
+- Group by device (imei, device_type, model)
+- Show traffic per device
+
 Question: {question}
 
-Return ONLY the query, no explanation."""
+IMPORTANT: 
+- Return the SQL query with comments explaining how you understood the question
+- Use -- for SQL comments
+- NEVER modify the user's intent
+- If user asks for "SBD" - include SBD filter
+- If user asks "by each device" - include device grouping
+- If user asks for specific month - include month filter
+
+Return the SQL query with understanding comments:"""
+
+    # DEBUG: Print part of the prompt to verify it contains the rules
+    print(f"🔍 DEBUG: Prompt contains 'NEVER modify': {'NEVER modify' in prompt}")
+    print(f"🔍 DEBUG: Prompt contains 'SBD filter': {'SBD filter' in prompt}")
 
     response = client.chat.completions.create(
-        model="qwen2.5:3b",
+        model="qwen3:8b",
         messages=[{"role": "user", "content": prompt}],
-        temperature=0.1
+        temperature=0.1,  # Slight flexibility for better adaptation
+        max_tokens=2000  # Limit response length to prevent infinite generation
     )
     
-    query = response.choices[0].message.content.strip()
+    raw_response = response.choices[0].message.content.strip()
+    print(f"🔍 DEBUG: Raw LLM response: '{raw_response[:200]}...'")
+    
+    query = raw_response
+    
+    # Remove <think> blocks (qwen3:8b thinking format) - aggressive cleanup
+    import re
+    
+    # Remove all <think>...</think> blocks (including nested ones)
+    query = re.sub(r'<think>.*?</think>', '', query, flags=re.DOTALL)
+    
+    # Remove any remaining <think> tags without closing
+    if "<think>" in query:
+        think_start = query.find("<think>")
+        query = query[:think_start].strip()
+        print(f"🔍 DEBUG: After removing incomplete <think>: '{query[:200]}...'")
+    
+    print(f"🔍 DEBUG: After removing <think> blocks: '{query[:200]}...'")
+    
     # Remove any markdown formatting
     if query.startswith("```"):
         query = query.split("```")[1]
     if query.startswith("sql"):
         query = query[3:]
-    return query.strip()
+    if query.endswith("```"):
+        query = query.rsplit("```", 1)[0]
+    
+    final_query = query.strip()
+    print(f"🔍 DEBUG: Final SQL query: '{final_query[:200]}...'")
+    print(f"🔍 DEBUG: Contains 'SBD': {'SBD' in final_query}")
+    
+    return final_query
 
 def execute_query(query: str, params: tuple = ()) -> tuple[pd.DataFrame, Optional[str]]:
     """Execute a query and return results as DataFrame"""
@@ -714,29 +793,63 @@ def create_chart(df: pd.DataFrame, chart_type: str = "line") -> None:
         return
     
     try:
-        if chart_type == "line" and 'month' in df.columns and 'total_usage' in df.columns:
-            # Линейный график для помесячных данных
-            if 'service_type' in df.columns:
-                fig = px.line(df, x='month', y='total_usage', color='service_type',
-                             title='Динамика трафика по типам услуг',
-                             labels={'month': 'Месяц', 'total_usage': 'Объем трафика'})
+        if chart_type == "line" and 'total_usage' in df.columns:
+            # Линейный график
+            if 'month' in df.columns:
+                # График по месяцам
+                if 'service_type' in df.columns:
+                    fig = px.line(df, x='month', y='total_usage', color='service_type',
+                                 title='Динамика трафика по типам услуг',
+                                 labels={'month': 'Месяц', 'total_usage': 'Объем трафика'})
+                else:
+                    fig = px.line(df, x='month', y='total_usage', 
+                                 title='Динамика трафика по месяцам',
+                                 labels={'month': 'Месяц', 'total_usage': 'Объем трафика'})
+            elif 'device_id' in df.columns:
+                # График по устройствам (горизонтальный)
+                fig = px.line(df, x='device_id', y='total_usage',
+                             title='Трафик по устройствам',
+                             labels={'device_id': 'Устройство', 'total_usage': 'Объем трафика'})
             else:
-                fig = px.line(df, x='month', y='total_usage', 
-                             title='Динамика трафика по месяцам',
-                             labels={'month': 'Месяц', 'total_usage': 'Объем трафика'})
+                # Общий линейный график
+                fig = px.line(df, y='total_usage',
+                             title='Объем трафика',
+                             labels={'total_usage': 'Объем трафика'})
             st.plotly_chart(fig, use_container_width=True)
             
-        elif chart_type == "bar" and 'service_type' in df.columns and 'total_usage' in df.columns:
-            # Столбчатая диаграмма для сравнения типов услуг
-            fig = px.bar(df, x='service_type', y='total_usage',
-                        title='Сравнение трафика по типам услуг',
-                        labels={'service_type': 'Тип услуги', 'total_usage': 'Объем трафика'})
+        elif chart_type == "bar" and 'total_usage' in df.columns:
+            # Столбчатая диаграмма для сравнения
+            if 'device_id' in df.columns:
+                # График по устройствам
+                fig = px.bar(df, x='device_id', y='total_usage',
+                            title='Трафик по устройствам',
+                            labels={'device_id': 'Устройство', 'total_usage': 'Объем трафика'})
+            elif 'service_type' in df.columns:
+                # График по типам услуг
+                fig = px.bar(df, x='service_type', y='total_usage',
+                            title='Сравнение трафика по типам услуг',
+                            labels={'service_type': 'Тип услуги', 'total_usage': 'Объем трафика'})
+            else:
+                # Общий график
+                fig = px.bar(df, y='total_usage',
+                            title='Объем трафика',
+                            labels={'total_usage': 'Объем трафика'})
             st.plotly_chart(fig, use_container_width=True)
             
-        elif chart_type == "pie" and 'service_type' in df.columns and 'total_usage' in df.columns:
+        elif chart_type == "pie" and 'total_usage' in df.columns:
             # Круговая диаграмма для распределения трафика
-            fig = px.pie(df, values='total_usage', names='service_type',
-                        title='Распределение трафика по типам услуг')
+            if 'device_id' in df.columns:
+                # Круговая диаграмма по устройствам
+                fig = px.pie(df, values='total_usage', names='device_id',
+                            title='Распределение трафика по устройствам')
+            elif 'service_type' in df.columns:
+                # Круговая диаграмма по типам услуг
+                fig = px.pie(df, values='total_usage', names='service_type',
+                            title='Распределение трафика по типам услуг')
+            else:
+                # Общая круговая диаграмма
+                fig = px.pie(df, values='total_usage',
+                            title='Распределение трафика')
             st.plotly_chart(fig, use_container_width=True)
             
         elif chart_type == "scatter" and 'usage_amount' in df.columns and 'duration_minutes' in df.columns:
@@ -830,7 +943,7 @@ def render_user_view():
     
     if st.session_state.get('rag_initialized'):
         st.sidebar.success("✅ RAG система активна")
-    else:
+        else:
         st.sidebar.warning("⚠️ RAG система недоступна")
     
     if st.session_state.get('kb_loaded_count', 0) > 0:
@@ -857,14 +970,14 @@ def render_user_view():
 def render_standard_reports():
     st.subheader("📊 Стандартные отчеты")
     st.write("Выберите готовый отчет из списка ниже:")
-    
-    # Use session_state for report type
-    report_type = st.selectbox(
-        "Тип отчета:",
-        [
-            "Текущий договор",
-            "Список устройств",
-            "Трафик за месяц",
+        
+        # Use session_state for report type
+        report_type = st.selectbox(
+            "Тип отчета:",
+            [
+                "Текущий договор",
+                "Список устройств",
+                "Трафик за месяц",
             "Использование за текущий месяц",
             "Сессии за последние 30 дней",
             "Статистика по типам услуг",
@@ -877,31 +990,31 @@ def render_standard_reports():
         ],
         index=["Текущий договор", "Список устройств", "Трафик за месяц", 
                "Использование за текущий месяц", "Сессии за последние 30 дней", "Статистика по типам услуг", "Помесячный SBD трафик", "Помесячный VSAT_DATA трафик", "Помесячный VSAT_VOICE трафик", "SBD сессии", "VSAT_DATA сессии", "VSAT_VOICE сессии"].index(st.session_state.current_report_type),
-        key="report_type"
-    )
-    
-    # Update session_state when report type changes
-    if report_type != st.session_state.current_report_type:
-        st.session_state.current_report_type = report_type
-    
+            key="report_type"
+        )
+        
+        # Update session_state when report type changes
+        if report_type != st.session_state.current_report_type:
+            st.session_state.current_report_type = report_type
+        
     if st.button("Показать отчет", key="show_report"):
-        with st.spinner("Загрузка отчета..."):
+            with st.spinner("Загрузка отчета..."):
             # Determine user role for access control
             user_role = 'staff' if st.session_state.is_staff else 'user'
             
-            if report_type == "Текущий договор":
+                if report_type == "Текущий договор":
                 query = STANDARD_QUERIES["Current agreement"]
-            elif report_type == "Список устройств":
+                elif report_type == "Список устройств":
                 query = STANDARD_QUERIES["My devices"]
-            elif report_type == "Трафик за месяц":
+                elif report_type == "Трафик за месяц":
                 query = STANDARD_QUERIES["My monthly traffic"]
             elif report_type == "Использование за текущий месяц":
                 query = STANDARD_QUERIES["Current month usage"]
             elif report_type == "Сессии за последние 30 дней":
                 query = STANDARD_QUERIES["Service sessions"]
             elif report_type == "Статистика по типам услуг":
-                query = """
-                SELECT 
+                    query = """
+                    SELECT 
                     st.name as service_type,
                     st.unit as unit,
                     COUNT(DISTINCT d.imei) as device_count,
@@ -964,10 +1077,10 @@ def render_standard_reports():
 def render_custom_query():
     st.subheader("📝 Пользовательский запрос")
     st.write("Задайте вопрос на русском языке, и система создаст SQL-запрос для анализа ваших данных.")
-    
-    # Show example questions
+        
+        # Show example questions
     with st.expander("💡 Примеры вопросов"):
-        st.markdown("""
+            st.markdown("""
         **📊 Аналитика:**
         - Покажи статистику трафика за последний месяц
         - Какие устройства потребляют больше всего трафика?
@@ -982,24 +1095,28 @@ def render_custom_query():
         - Покажи технические регламенты
         - Какие стандарты безопасности?
         - Процедуры настройки оборудования
-        """)
-    
-    # Use session_state for user question
-    user_question = st.text_area(
+            """)
+        
+        # Use session_state for user question
+        user_question = st.text_area(
         "💬 Задайте ваш вопрос:",
-        value=st.session_state.current_user_question,
-        placeholder="Например: Покажи статистику трафика за последнюю неделю",
-        height=100,
-        key="user_question"
-    )
-    
-    # Update session_state when question changes
-    if user_question != st.session_state.current_user_question:
-        st.session_state.current_user_question = user_question
-    
+            value=st.session_state.current_user_question,
+            placeholder="Например: Покажи статистику трафика за последнюю неделю",
+            height=100,
+            key="user_question"
+        )
+        
+        # Update session_state when question changes
+        if user_question != st.session_state.current_user_question:
+            st.session_state.current_user_question = user_question
+        
     if st.button("Создать запрос", key="create_query"):
-        if user_question:
-            with st.spinner("Генерирую запрос..."):
+            if user_question:
+            # DEBUG: Print the user question before processing
+            print(f"🔍 DEBUG: User question in render_custom_query: '{user_question}'")
+            print(f"🔍 DEBUG: Question length: {len(user_question)}")
+            
+                with st.spinner("Генерирую запрос..."):
                 # Try to use multi-KB RAG first for enhanced context
                 if st.session_state.get('multi_rag') and st.session_state.multi_rag.get_available_kbs():
                     # Use multi-KB RAG for enhanced context
@@ -1013,26 +1130,25 @@ def render_custom_query():
                         st.info(kb_response)
                         st.markdown("---")
                 
-                # Generate SQL query
-                query, explanation = st.session_state.rag_helper.get_query_suggestion(
-                    user_question, st.session_state.company
-                )
-                if query:
-                    # Store results in session_state
-                    st.session_state.current_sql_query = query
-                    st.session_state.current_query_explanation = explanation
-                    st.session_state.current_query_results = execute_query(query)
-                    
-                    st.markdown("#### Объяснение запроса")
-                    st.info(explanation)
-                    st.markdown("#### SQL Запрос")
-                    st.code(query, language="sql")
-                    st.markdown("#### Результаты")
-                    display_query_results(query)
-                else:
-                    st.error("Не удалось сгенерировать запрос. Попробуйте переформулировать вопрос.")
-        else:
-            st.warning("Пожалуйста, введите ваш вопрос.")
+                # Generate SQL query using direct function (preserves full user question)
+                print(f"🔍 DEBUG: About to call generate_sql with: '{user_question}'")
+                query = generate_sql(user_question, st.session_state.company)
+                    if query:
+                        # Store results in session_state
+                        st.session_state.current_sql_query = query
+                    st.session_state.current_query_explanation = f"SQL запрос для: {user_question}"
+                        st.session_state.current_query_results = execute_query(query)
+                        
+                        st.markdown("#### Объяснение запроса")
+                    st.info(st.session_state.current_query_explanation)
+                        st.markdown("#### SQL Запрос")
+                        st.code(query, language="sql")
+                        st.markdown("#### Результаты")
+                        display_query_results(query)
+                    else:
+                        st.error("Не удалось сгенерировать запрос. Попробуйте переформулировать вопрос.")
+            else:
+                st.warning("Пожалуйста, введите ваш вопрос.")
         
         # Display stored results if available
         if st.session_state.current_query_explanation and st.session_state.current_sql_query:
@@ -1164,7 +1280,7 @@ def render_smart_assistant():
 
 def render_help():
     st.subheader("❓ Помощь")
-    st.markdown("""
+        st.markdown("""
         ### Как пользоваться личным кабинетом
         
         #### 1. Стандартные отчеты
@@ -1187,9 +1303,9 @@ def render_help():
         - Некоторые сложные запросы могут требовать уточнения
         - При ошибках попробуйте переформулировать вопрос
         """)
-    
-    if st.button("Показать подробную справку"):
-        with st.spinner("Загружаю справку..."):
+        
+        if st.button("Показать подробную справку"):
+            with st.spinner("Загружаю справку..."):
             if st.session_state.rag_helper:
                 help_text = st.session_state.rag_helper.get_response("Как пользоваться личным кабинетом?")
                 st.markdown(help_text)
@@ -1203,48 +1319,48 @@ def render_staff_view():
     tab1, tab2, tab3 = st.tabs(["📊 Аналитика трафика", "📋 Стандартные отчеты", "🔧 Админ-панель"])
     
     with tab1:
-        # Company selector
-        companies_query = "SELECT DISTINCT company FROM users WHERE role = 'user' ORDER BY company"
-        conn = sqlite3.connect('satellite_billing.db')
-        df = pd.read_sql_query(companies_query, conn)
-        conn.close()
-        
-        selected_company = st.selectbox("Select Company:", ["All Companies"] + df['company'].tolist())
-        
-        # AI Query Assistant
-        st.header("AI Query Assistant")
-        user_question = st.text_area(
-            "Ask a question:",
-            help="Example: 'Show me total traffic per company in the last month' or 'List all active devices'"
-        )
-        
-        if st.button("Generate Query"):
-            with st.spinner("Generating query..."):
-                company = None if selected_company == "All Companies" else selected_company
-                query = generate_sql(user_question, company)
-                results = execute_query(query)
-                
-                # Show query
-                with st.expander("Show SQL Query"):
-                    st.code(query, language="sql")
-                
-                # Show results
-                if isinstance(results, tuple) and len(results) == 2:
-                    df, error = results
-                    if error:
-                        st.error(f"Error executing query: {error}")
-                    else:
-                        st.dataframe(df)
-                        
-                        # Download option
-                        if not df.empty:
-                            csv = df.to_csv(index=False)
-                            st.download_button(
-                                label="Download results as CSV",
-                                data=csv,
-                                file_name=f"query_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                                mime="text/csv"
-                            )
+    # Company selector
+    companies_query = "SELECT DISTINCT company FROM users WHERE role = 'user' ORDER BY company"
+    conn = sqlite3.connect('satellite_billing.db')
+    df = pd.read_sql_query(companies_query, conn)
+    conn.close()
+    
+    selected_company = st.selectbox("Select Company:", ["All Companies"] + df['company'].tolist())
+    
+    # AI Query Assistant
+    st.header("AI Query Assistant")
+    user_question = st.text_area(
+        "Ask a question:",
+        help="Example: 'Show me total traffic per company in the last month' or 'List all active devices'"
+    )
+    
+    if st.button("Generate Query"):
+        with st.spinner("Generating query..."):
+            company = None if selected_company == "All Companies" else selected_company
+            query = generate_sql(user_question, company)
+            results = execute_query(query)
+            
+            # Show query
+            with st.expander("Show SQL Query"):
+                st.code(query, language="sql")
+            
+            # Show results
+            if isinstance(results, tuple) and len(results) == 2:
+                df, error = results
+                if error:
+                    st.error(f"Error executing query: {error}")
+                else:
+                    st.dataframe(df)
+                    
+                    # Download option
+                    if not df.empty:
+                        csv = df.to_csv(index=False)
+                        st.download_button(
+                            label="Download results as CSV",
+                            data=csv,
+                            file_name=f"query_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime="text/csv"
+                        )
     
     with tab2:
         st.subheader("📋 Стандартные отчеты (все компании)")
@@ -1630,7 +1746,7 @@ def main():
             if view_choice == "🏠 Личный кабинет":
                 render_user_view()
             else:
-                render_staff_view()
+            render_staff_view()
         else:
             render_user_view()
 

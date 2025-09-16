@@ -357,34 +357,56 @@ class RAGHelper:
         User can only see data for their company ({company}).
         
         Available tables and constraints:
-        1. agreements - filter: user_id IN (SELECT id FROM users WHERE company = '{company}')
+        1. service_types - types of services
+           - id
+           - name (SBD, VSAT_DATA, VSAT_VOICE)
+           - unit (KB, MB, minutes)
+           - description
+        
+        2. tariffs - tariff plans
+           - id
+           - service_type_id
+           - name
+           - price_per_unit
+           - monthly_fee
+           - traffic_limit
+           - is_active
+        
+        3. agreements - filter: user_id IN (SELECT id FROM users WHERE company = '{company}')
            - id
            - user_id
-           - plan_type
-           - monthly_fee
-           - traffic_limit_bytes
+           - tariff_id
            - start_date
            - end_date
            - status
         
-        2. devices - filter: user_id IN (SELECT id FROM users WHERE company = '{company}')
+        4. devices - filter: user_id IN (SELECT id FROM users WHERE company = '{company}')
            - imei
            - user_id
            - device_type
            - model
            - activated_at
         
-        3. billing_records - join through devices or agreements
+        5. sessions - usage sessions
+           - id
+           - imei
+           - service_type_id
+           - session_start
+           - session_end
+           - usage_amount
+        
+        6. billing_records - join through devices or agreements
            - id
            - agreement_id
            - imei
+           - service_type_id
            - billing_date
-           - traffic_bytes
+           - usage_amount
            - amount
            - paid
            - payment_date
         
-        4. users - used for company filtering
+        7. users - used for company filtering
            - id
            - username
            - company
@@ -402,13 +424,19 @@ class RAGHelper:
         
         Example query for current agreement:
         SELECT 
-            a.plan_type as plan,
-            a.monthly_fee as fee,
+            t.name as tariff_name,
+            st.name as service_type,
+            st.unit as unit,
+            t.price_per_unit as price_per_unit,
+            t.monthly_fee as monthly_fee,
+            t.traffic_limit as traffic_limit,
             a.start_date as start_date,
             a.end_date as end_date,
             a.status as status
         FROM agreements a
         JOIN users u ON a.user_id = u.id
+        JOIN tariffs t ON a.tariff_id = t.id
+        JOIN service_types st ON t.service_type_id = st.id
         WHERE u.company = '{company}'
             AND date('now') BETWEEN date(a.start_date) AND date(a.end_date)
             AND a.status = 'active';
