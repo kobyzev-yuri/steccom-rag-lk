@@ -460,6 +460,9 @@ def render_user_view():
             quick_question = _generate_quick_question()
             st.session_state.assistant_question = quick_question
     
+    # Controls for retrieval
+    k_sources = st.sidebar.slider("Количество фрагментов (K)", 1, 8, 3, 1)
+
     # Use session_state for assistant question
     doc_question = st.sidebar.text_area(
         "Задайте вопрос:",
@@ -468,6 +471,20 @@ def render_user_view():
         key="doc_question"
     )
     
+    # Rephrase button
+    if st.sidebar.button("♻️ Переформулировать", key="rephrase_question"):
+        if doc_question and st.session_state.get('rag_helper'):
+            try:
+                rephrased = st.session_state.rag_helper.get_response(
+                    f"Переформулируй вопрос кратко и однозначно: {doc_question}. Верни только текст вопроса." 
+                )
+                if rephrased:
+                    st.session_state.assistant_question = rephrased.strip()
+                    st.session_state.assistant_answer = ""
+                    doc_question = st.session_state.assistant_question
+            except Exception:
+                pass
+
     # Update session_state when question changes
     if doc_question != st.session_state.assistant_question:
         st.session_state.assistant_question = doc_question
@@ -478,7 +495,23 @@ def render_user_view():
             with st.spinner("Ищу ответ..."):
                 # Try multi-KB RAG first
                 if st.session_state.get('multi_rag') and st.session_state.multi_rag.get_available_kbs():
-                    answer = st.session_state.multi_rag.get_response_with_context(doc_question)
+                    # Show sources first
+                    try:
+                        docs = st.session_state.multi_rag.search_across_kbs(doc_question, k=k_sources)
+                    except Exception:
+                        docs = []
+
+                    if docs:
+                        st.sidebar.markdown("**Источники:**")
+                        for i, d in enumerate(docs, 1):
+                            title = d.metadata.get('title', 'Документ')
+                            kb_name = d.metadata.get('kb_name', '')
+                            search_type = d.metadata.get('search_type', 'vector_search')
+                            preview = d.page_content[:200].replace("\n", " ") + ("…" if len(d.page_content) > 200 else "")
+                            st.sidebar.write(f"{i}. {title} — {kb_name} ({search_type})")
+                            st.sidebar.caption(preview)
+
+                    answer = st.session_state.multi_rag.get_response_with_context(doc_question, context_limit=k_sources)
                     if answer and "Не найдено релевантной информации" not in answer:
                         st.session_state.assistant_answer = answer
                     else:
