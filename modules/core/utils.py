@@ -18,6 +18,11 @@ def create_chart(df: pd.DataFrame, chart_type: str = "line") -> None:
         st.warning("Нет данных для построения графика")
         return
     
+    # Отладочная информация
+    st.write(f"🔍 Отладка: Тип графика: {chart_type}")
+    st.write(f"🔍 Отладка: Колонки в данных: {list(df.columns)}")
+    st.write(f"🔍 Отладка: Размер данных: {df.shape}")
+    
     try:
         if chart_type == "line" and 'total_usage' in df.columns:
             # Линейный график
@@ -91,10 +96,43 @@ def create_chart(df: pd.DataFrame, chart_type: str = "line") -> None:
             st.plotly_chart(fig, use_container_width=True)
             
         else:
-            st.info("Автоматическое построение графика недоступно для данного типа данных")
+            # Универсальный график для любых данных
+            st.info("Создаю универсальный график...")
+            
+            # Найдем числовые колонки
+            numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
+            if numeric_cols:
+                # Используем первую числовую колонку
+                y_col = numeric_cols[0]
+                x_col = df.columns[0] if len(df.columns) > 1 else None
+                
+                if chart_type == "line":
+                    if x_col:
+                        fig = px.line(df, x=x_col, y=y_col, title=f'График: {y_col}')
+                    else:
+                        fig = px.line(df, y=y_col, title=f'График: {y_col}')
+                elif chart_type == "bar":
+                    if x_col:
+                        fig = px.bar(df, x=x_col, y=y_col, title=f'Диаграмма: {y_col}')
+                    else:
+                        fig = px.bar(df, y=y_col, title=f'Диаграмма: {y_col}')
+                elif chart_type == "pie":
+                    if x_col and y_col:
+                        fig = px.pie(df, names=x_col, values=y_col, title=f'Круговая диаграмма: {y_col}')
+                    else:
+                        st.warning("Для круговой диаграммы нужны две колонки")
+                        return
+                else:
+                    st.warning(f"Тип графика '{chart_type}' не поддерживается для данных")
+                    return
+                
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.warning("Нет числовых данных для построения графика")
             
     except Exception as e:
         st.error(f"Ошибка построения графика: {str(e)}")
+        st.write(f"🔍 Отладка ошибки: {e}")
 
 
 def display_query_results(query: str, params: Tuple = ()) -> None:

@@ -10,7 +10,13 @@ from datetime import datetime
 from typing import Optional, List, Dict
 import hashlib
 from openai import OpenAI
-from modules.rag.rag_helper import RAGHelper
+# Optional import for RAGHelper
+try:
+    from modules.rag.rag_helper import RAGHelper
+    RAG_HELPER_AVAILABLE = True
+except ImportError:
+    RAG_HELPER_AVAILABLE = False
+    print("⚠️ RAGHelper недоступен: langchain_huggingface не установлен")
 import os
 import sys
 import plotly.express as px
@@ -54,9 +60,15 @@ def initialize_rag_system():
     """Initialize RAG system safely"""
     if not st.session_state.rag_initialized:
         try:
-            # Initialize RAG helper
-            st.session_state.rag_helper = RAGHelper()
-            st.session_state.rag_initialized = True
+            # Initialize RAG helper only if available
+            if RAG_HELPER_AVAILABLE:
+                st.session_state.rag_helper = RAGHelper()
+                st.session_state.rag_initialized = True
+                print("✅ RAGHelper инициализирован")
+            else:
+                st.session_state.rag_helper = None
+                st.session_state.rag_initialized = False
+                print("⚠️ RAGHelper недоступен")
             
             # Try to initialize multi-KB RAG if available
             try:
@@ -67,18 +79,19 @@ def initialize_rag_system():
                 available_kbs = st.session_state.multi_rag.get_available_kbs()
                 st.session_state.kb_loaded_count = len(available_kbs)
                 st.session_state.loaded_kbs_info = available_kbs
+                print(f"✅ Multi-KB RAG инициализирован: {len(available_kbs)} БЗ")
                 
             except (ImportError, Exception) as e:
                 st.session_state.multi_rag = None
                 st.session_state.kb_loaded_count = 0
                 st.session_state.loaded_kbs_info = []
-                print(f"Multi-KB RAG not available: {e}")
+                print(f"⚠️ Multi-KB RAG недоступен: {e}")
                 
         except Exception as e:
             st.session_state.rag_initialized = False
             st.session_state.rag_helper = None
             st.session_state.multi_rag = None
-            print(f"RAG initialization error: {e}")
+            print(f"❌ Ошибка инициализации RAG: {e}")
 
 
 def login_page():
@@ -101,7 +114,7 @@ def login_page():
                     st.session_state.company = company
                     st.session_state.is_staff = (role == 'staff')
                     st.success(f"Добро пожаловать, {username}!")
-                    st.experimental_rerun()
+                    st.rerun()
                 else:
                     st.error("Неверное имя пользователя или пароль")
             else:
@@ -150,7 +163,7 @@ def main():
             if key in st.session_state:
                 del st.session_state[key]
         # Don't use st.rerun() to avoid cache issues
-        st.experimental_rerun()
+        st.rerun()
 
 
 if __name__ == "__main__":
