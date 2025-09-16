@@ -398,11 +398,20 @@ STANDARD_QUERIES = {
     """
 }
 
-def execute_standard_query(query_name: str, company: str) -> tuple[pd.DataFrame, Optional[str]]:
-    """Execute a standard query with company parameter"""
+def execute_standard_query(query_name: str, company: str, user_role: str = 'user') -> tuple[pd.DataFrame, Optional[str]]:
+    """Execute a standard query with company parameter and role-based access"""
     try:
         conn = sqlite3.connect('satellite_billing.db')
-        df = pd.read_sql_query(STANDARD_QUERIES[query_name], conn, params=(company,))
+        
+        # For staff users, show all data; for regular users, filter by company
+        if user_role == 'staff':
+            # Staff can see all companies - remove company filter
+            query = STANDARD_QUERIES[query_name].replace('WHERE u.company = ?', 'WHERE 1=1')
+            df = pd.read_sql_query(query, conn)
+        else:
+            # Regular users see only their company data
+            df = pd.read_sql_query(STANDARD_QUERIES[query_name], conn, params=(company,))
+        
         return df, None
     except Exception as e:
         return pd.DataFrame(), str(e)
@@ -563,7 +572,13 @@ def display_query_results(query: str, params: tuple = ()):
         st.error("Unexpected query result format")
 
 def render_user_view():
-    st.title(f"🏠 Личный кабинет: {st.session_state.company}")
+    # Show user role and company
+    if st.session_state.is_staff:
+        st.title(f"🔧 Административная панель: {st.session_state.company}")
+        st.info("👑 Вы вошли как администратор - доступны данные всех компаний")
+    else:
+        st.title(f"🏠 Личный кабинет: {st.session_state.company}")
+        st.info("👤 Вы вошли как пользователь - доступны только данные вашей компании")
     
     # Sidebar navigation
     st.sidebar.title("Навигация")
@@ -634,6 +649,9 @@ def render_standard_reports():
     
     if st.button("Показать отчет", key="show_report"):
         with st.spinner("Загрузка отчета..."):
+            # Determine user role for access control
+            user_role = 'staff' if st.session_state.is_staff else 'user'
+            
             if report_type == "Текущий договор":
                 query = STANDARD_QUERIES["Current agreement"]
             elif report_type == "Список устройств":
@@ -662,8 +680,16 @@ def render_standard_reports():
                 ORDER BY total_usage DESC
                 """
             
+            # Apply role-based access control
+            if user_role == 'staff':
+                # Staff can see all companies - remove company filter
+                query = query.replace('WHERE u.company = ?', 'WHERE 1=1')
+                results = execute_query(query)
+            else:
+                # Regular users see only their company data
+                results = execute_query(query, params=(st.session_state.company,))
+            
             # Store results in session_state
-            results = execute_query(query, params=(st.session_state.company,))
             st.session_state.current_query_results = results
             st.session_state.current_sql_query = query
             st.session_state.current_query_explanation = f"Результаты отчета: {report_type}"
@@ -925,7 +951,7 @@ def render_staff_view():
     st.title("🔧 Административная панель СТЭККОМ")
     
     # Navigation tabs
-    tab1, tab2 = st.tabs(["📊 Аналитика трафика", "🔧 Админ-панель"])
+    tab1, tab2, tab3 = st.tabs(["📊 Аналитика трафика", "📋 Стандартные отчеты", "🔧 Админ-панель"])
     
     with tab1:
         # Company selector
@@ -972,6 +998,160 @@ def render_staff_view():
                             )
     
     with tab2:
+        st.subheader("📋 Стандартные отчеты (все компании)")
+        st.write("Административные отчеты по всем компаниям и договорам:")
+        
+        # Admin report types
+        admin_report_type = st.selectbox(
+            "Тип отчета:",
+            [
+                "Все договоры",
+                "Все устройства", 
+                "Трафик по компаниям",
+                "Использование по типам услуг",
+                "Сессии всех пользователей",
+                "Статистика по тарифам"
+            ],
+            key="admin_report_type"
+        )
+        
+        if st.button("Показать отчет", key="show_admin_report"):
+            with st.spinner("Загрузка отчета..."):
+                if admin_report_type == "Все договоры":
+                    query = """
+                    SELECT 
+                        u.company,
+                        t.name as tariff_name,
+                        st.name as service_type,
+                        st.unit as unit,
+                        t.price_per_unit,
+                        t.monthly_fee,
+                        t.traffic_limit,
+                        a.start_date,
+                        a.end_date,
+                        a.status
+                    FROM agreements a
+                    JOIN users u ON a.user_id = u.id
+                    JOIN tariffs t ON a.tariff_id = t.id
+                    JOIN service_types st ON t.service_type_id = st.id
+                    ORDER BY u.company, t.name
+                    """
+                elif admin_report_type == "Все устройства":
+                    query = """
+                    SELECT 
+                        u.company,
+                        d.imei,
+                        d.device_type,
+                        d.model,
+                        d.activated_at,
+                        st.name as service_type,
+                        st.unit as unit,
+                        SUM(b.usage_amount) as total_usage,
+                        ROUND(SUM(b.amount), 2) as total_amount
+                    FROM devices d
+                    LEFT JOIN billing_records b ON d.imei = b.imei
+                    LEFT JOIN service_types st ON b.service_type_id = st.id
+                    JOIN users u ON d.user_id = u.id
+                    GROUP BY d.imei, st.name, st.unit
+                    ORDER BY u.company, d.imei
+                    """
+                elif admin_report_type == "Трафик по компаниям":
+                    query = """
+                    SELECT 
+                        u.company,
+                        strftime('%Y-%m', b.billing_date) as month,
+                        st.name as service_type,
+                        st.unit as unit,
+                        SUM(b.usage_amount) as total_usage,
+                        ROUND(SUM(b.amount), 2) as total_amount,
+                        COUNT(DISTINCT b.imei) as active_devices
+                    FROM billing_records b
+                    JOIN agreements a ON b.agreement_id = a.id
+                    JOIN users u ON a.user_id = u.id
+                    JOIN service_types st ON b.service_type_id = st.id
+                    GROUP BY u.company, strftime('%Y-%m', b.billing_date), st.name, st.unit
+                    ORDER BY u.company, month DESC, st.name
+                    """
+                elif admin_report_type == "Использование по типам услуг":
+                    query = """
+                    SELECT 
+                        st.name as service_type,
+                        st.unit as unit,
+                        COUNT(DISTINCT u.company) as companies_count,
+                        COUNT(DISTINCT d.imei) as device_count,
+                        SUM(b.usage_amount) as total_usage,
+                        ROUND(SUM(b.amount), 2) as total_amount,
+                        ROUND(AVG(b.usage_amount), 2) as avg_usage_per_record
+                    FROM billing_records b
+                    JOIN devices d ON b.imei = d.imei
+                    JOIN users u ON d.user_id = u.id
+                    JOIN service_types st ON b.service_type_id = st.id
+                    GROUP BY st.name, st.unit
+                    ORDER BY total_usage DESC
+                    """
+                elif admin_report_type == "Сессии всех пользователей":
+                    query = """
+                    SELECT 
+                        u.company,
+                        s.imei,
+                        st.name as service_type,
+                        st.unit as unit,
+                        s.session_start,
+                        s.session_end,
+                        s.usage_amount
+                    FROM sessions s
+                    JOIN devices d ON s.imei = d.imei
+                    JOIN users u ON d.user_id = u.id
+                    JOIN service_types st ON s.service_type_id = st.id
+                    WHERE date(s.session_start) >= date('now', '-30 days')
+                    ORDER BY s.session_start DESC
+                    LIMIT 200
+                    """
+                elif admin_report_type == "Статистика по тарифам":
+                    query = """
+                    SELECT 
+                        t.name as tariff_name,
+                        st.name as service_type,
+                        st.unit as unit,
+                        t.price_per_unit,
+                        t.monthly_fee,
+                        t.traffic_limit,
+                        COUNT(a.id) as active_agreements,
+                        COUNT(DISTINCT u.company) as companies_count
+                    FROM tariffs t
+                    JOIN service_types st ON t.service_type_id = st.id
+                    LEFT JOIN agreements a ON t.id = a.tariff_id AND a.status = 'active'
+                    LEFT JOIN users u ON a.user_id = u.id
+                    WHERE t.is_active = 1
+                    GROUP BY t.id, t.name, st.name, st.unit
+                    ORDER BY active_agreements DESC
+                    """
+                
+                results = execute_query(query)
+                st.session_state.current_query_results = results
+                st.session_state.current_sql_query = query
+                st.session_state.current_query_explanation = f"Административный отчет: {admin_report_type}"
+        
+        # Display results
+        if st.session_state.current_query_results:
+            df, error = st.session_state.current_query_results
+            if error:
+                st.error(f"Ошибка выполнения запроса: {error}")
+            else:
+                st.markdown("#### Результаты отчета")
+                st.dataframe(df)
+                
+                # Download option
+                if not df.empty:
+                    csv = df.to_csv(index=False)
+                    st.download_button(
+                        label="Скачать результаты как CSV",
+                        data=csv,
+                        file_name=f"admin_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv"
+                    )
+    
+    with tab3:
         if ADMIN_AVAILABLE:
             admin_panel = AdminPanel()
             admin_panel.render_main_panel()
@@ -1068,7 +1248,17 @@ def main():
     else:
         # Render appropriate view based on role
         if st.session_state.is_staff:
-            render_staff_view()
+            # Staff users can choose between admin panel and user view
+            view_choice = st.sidebar.radio(
+                "Выберите режим:",
+                ["🏠 Личный кабинет", "🔧 Админ-панель"],
+                key="staff_view_choice"
+            )
+            
+            if view_choice == "🏠 Личный кабинет":
+                render_user_view()
+            else:
+                render_staff_view()
         else:
             render_user_view()
 
