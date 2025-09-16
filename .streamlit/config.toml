@@ -1,9 +1,11 @@
 [global]
 # Disable caching to prevent cache-related issues
-developmentMode = true
+developmentMode = false
 
 [server]
-# Reduce memory usage
+# Server configuration
+port = 8501
+headless = true
 maxUploadSize = 200
 
 [browser]
