@@ -29,7 +29,7 @@ from langchain.schema import StrOutputParser
 from langchain.schema import Document
 
 class MultiKBRAG:
-    def __init__(self, db_path: str = "satellite_billing.db",
+    def __init__(self, db_path: str = "data/knowledge_bases/kbs.db",
                  chat_provider: Optional[str] = None,
                  chat_model: Optional[str] = None,
                  proxy_base_url: Optional[str] = None,
@@ -84,6 +84,12 @@ class MultiKBRAG:
         self.vectorstores = {}  # kb_id -> vectorstore
         self.kb_metadata = {}   # kb_id -> metadata
         self.kb_chunks = {}     # kb_id -> List[Document]
+        
+        # Загружаем все активные базы знаний при инициализации
+        try:
+            self.load_all_active_kbs()
+        except Exception as e:
+            print(f"⚠️ Не удалось загрузить базы знаний: {e}")
 
     def set_chat_backend(self, provider: str, model: str,
                          base_url: Optional[str] = None,
