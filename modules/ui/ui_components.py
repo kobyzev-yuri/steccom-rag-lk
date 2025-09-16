@@ -11,7 +11,8 @@ from typing import Optional
 
 from ..core.database import execute_standard_query, execute_query
 from ..core.rag import generate_sql
-from ..core.utils import display_query_results, create_chart
+from ..core.utils import display_query_results
+from ..core.charts import create_chart
 from ..core.queries import STANDARD_QUERIES, QUICK_QUESTIONS
 
 
@@ -169,51 +170,30 @@ def render_standard_reports():
                         mime="text/csv"
                     )
                 
-                # Chart section
+                # Chart section - автоматическое построение графика
                 if not df.empty:
                     st.markdown("### 📊 График")
                     
                     # Создаем уникальный ключ для этого отчета
                     chart_key = f"chart_{hash(report_type)}"
                     
-                    col1, col2 = st.columns([3, 1])
+                    # Выбор типа графика
+                    chart_type = st.selectbox(
+                        "Тип графика:",
+                        ["line", "bar", "pie", "scatter"],
+                        format_func=lambda x: {
+                            "line": "📈 Линейный график",
+                            "bar": "📊 Столбчатая диаграмма", 
+                            "pie": "🥧 Круговая диаграмма",
+                            "scatter": "🔍 Точечная диаграмма"
+                        }[x],
+                        key=f"standard_chart_type_{chart_key}"
+                    )
                     
-                    with col1:
-                        chart_type = st.selectbox(
-                            "Тип графика:",
-                            ["line", "bar", "pie", "scatter"],
-                            format_func=lambda x: {
-                                "line": "📈 Линейный график",
-                                "bar": "📊 Столбчатая диаграмма", 
-                                "pie": "🥧 Круговая диаграмма",
-                                "scatter": "🔍 Точечная диаграмма"
-                            }[x],
-                            key=f"standard_chart_type_{chart_key}"
-                        )
-                    
-                    with col2:
-                        if st.button("Построить график", key=f"build_standard_chart_{chart_key}"):
-                            st.write(f"🔍 DEBUG: Кнопка 'Построить график' нажата для отчета: {report_type}")
-                            st.write(f"🔍 DEBUG: Тип графика: {chart_type}")
-                            st.write(f"🔍 DEBUG: Данные: {df.shape}, колонки: {list(df.columns)}")
-                            
-                            # Сохраняем данные и тип графика в session_state
-                            st.session_state[f"chart_data_{chart_key}"] = df
-                            st.session_state[f"chart_type_{chart_key}"] = chart_type
-                            st.session_state[f"show_chart_{chart_key}"] = True
-                    
-                    # Показываем график если он был запрошен
-                    if st.session_state.get(f"show_chart_{chart_key}", False):
-                        saved_df = st.session_state.get(f"chart_data_{chart_key}")
-                        saved_chart_type = st.session_state.get(f"chart_type_{chart_key}")
-                        
-                        if saved_df is not None:
-                            st.write(f"🔍 DEBUG: Отображаем сохраненный график типа: {saved_chart_type}")
-                            create_chart(saved_df, saved_chart_type)
-                            
-                            # Кнопка для скрытия графика
-                            if st.button("Скрыть график", key=f"hide_chart_{chart_key}"):
-                                st.session_state[f"show_chart_{chart_key}"] = False
+                    # Автоматически строим график
+                    st.write(f"🔍 DEBUG: Автоматически строим график типа: {chart_type}")
+                    st.write(f"🔍 DEBUG: Данные: {df.shape}, колонки: {list(df.columns)}")
+                    create_chart(df, chart_type)
 
 
 def render_custom_query():
