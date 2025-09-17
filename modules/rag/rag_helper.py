@@ -43,17 +43,43 @@ class RAGHelper:
         self.initialize_vectorstore()
 
     def load_json_data(self) -> Union[List[Dict], List[str]]:
-        """Load and parse steccom.json data"""
+        """Load and parse steccom.json and optional docs/kb/*.json files"""
         try:
+            aggregated: List[Union[Dict, str]] = []
+
+            # Primary KB file at project root
             json_path = Path("steccom.json")
-            if not json_path.exists():
-                # If file doesn't exist, return empty list to allow system to work with built-in docs
-                print("Warning: steccom.json not found, using built-in documentation only")
-                return []
-            
-            with open(json_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            return data
+            if json_path.exists():
+                with open(json_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                if isinstance(data, list):
+                    aggregated.extend(data)
+                elif isinstance(data, dict) or isinstance(data, str):
+                    aggregated.append(data)
+            else:
+                print("Warning: steccom.json not found, relying on built-in docs and docs/kb/")
+
+            # Additional KB files under docs/kb/*.json
+            kb_dir = Path("docs/kb")
+            if kb_dir.exists() and kb_dir.is_dir():
+                for kb_file in sorted(kb_dir.glob("*.json")):
+                    try:
+                        with open(kb_file, 'r', encoding='utf-8') as f:
+                            kb_data = json.load(f)
+                        if isinstance(kb_data, list):
+                            for it in kb_data:
+                                if isinstance(it, dict):
+                                    it = {**it, "_kb_file": str(kb_file)}
+                                aggregated.append(it)
+                        elif isinstance(kb_data, dict) or isinstance(kb_data, str):
+                            if isinstance(kb_data, dict):
+                                kb_data = {**kb_data, "_kb_file": str(kb_file)}
+                            aggregated.append(kb_data)
+                        print(f"Loaded KB file: {kb_file}")
+                    except Exception as e:
+                        print(f"Warning: failed to load KB file {kb_file}: {e}")
+
+            return aggregated
         except json.JSONDecodeError as e:
             print(f"Warning: Error parsing steccom.json: {e}")
             return []
@@ -62,7 +88,9 @@ class RAGHelper:
             return []
 
     def process_json_to_documents(self, data: Union[List[Dict], List[str]]) -> List[Document]:
-        """Convert JSON data into text documents with enhanced personal account focus"""
+        """Convert JSON data into text documents with enhanced personal account focus.
+        Honors optional metadata fields: audience (user/admin), scope (current_billing/legacy_billing), status.
+        """
         documents = []
         
         # Add comprehensive personal account usage guide
@@ -318,10 +346,20 @@ class RAGHelper:
                     content = item
                 
                 if content.strip():
-                    documents.append(Document(
-                        page_content=content,
-                        metadata={"source": "steccom"}
-                    ))
+                    metadata: Dict = {"source": "steccom"}
+                    if isinstance(item, dict):
+                        # propagate role/scope metadata if present
+                        if 'audience' in item:
+                            metadata['audience'] = item['audience']
+                        if 'scope' in item:
+                            metadata['scope'] = item['scope']
+                        if 'status' in item:
+                            metadata['status'] = item['status']
+                        if '_kb_file' in item:
+                            metadata['kb_file'] = item['_kb_file']
+                        if 'title' in item:
+                            metadata['title'] = item['title']
+                    documents.append(Document(page_content=content, metadata=metadata))
         
         return documents
 
@@ -529,52 +567,96 @@ SQL ЗАПРОС: {query}
         except Exception as e:
             return f"Объяснение недоступно: {e}"
 
-    def get_response(self, question: str) -> str:
-        """Get response for a question using RAG"""
-        template = """Ты - эксперт по личному кабинету системы спутниковой связи СТЭККОМ. Твоя задача - помогать пользователям разобраться с работой системы.
-
-КОНТЕКСТ:
-{context}
-
-ВОПРОС ПОЛЬЗОВАТЕЛЯ: {question}
-
-ПРАВИЛА ОТВЕТА:
-1. Отвечай ТОЛЬКО на русском языке
-2. Будь подробным, но кратким
-3. Если вопрос о том, как что-то сделать - дай пошаговую инструкцию
-4. Если вопрос о возможностях системы - перечисли основные функции
-5. Если вопрос о примерах запросов - приведи конкретные примеры
-6. Если вопрос о проблемах - предложи решения
-7. Если не знаешь ответа - честно скажи об этом
-8. Используй информацию из контекста
-9. Не выдумывай информацию
-
-СТРУКТУРА ОТВЕТА:
-- Краткий ответ на вопрос
-- Пошаговые инструкции (если применимо)
-- Примеры (если применимо)
-- Дополнительные советы (если применимо)
-
-ОТВЕТ:"""
-
-        prompt = ChatPromptTemplate.from_template(template)
-        
+    def _load_prompt(self, path: str, default: str) -> str:
         try:
-            # Get relevant documents
+            with open(path, 'r', encoding='utf-8') as f:
+                return f.read()
+        except Exception:
+            return default
+
+    def _filter_docs_by_role_and_scope(self, docs: List[Document], role: str) -> List[Document]:
+        filtered: List[Document] = []
+        for doc in docs:
+            audience = doc.metadata.get('audience') if isinstance(doc.metadata, dict) else None
+            scope = doc.metadata.get('scope') if isinstance(doc.metadata, dict) else None
+
+            # role filter: if audience present, only include if role is allowed
+            if audience:
+                try:
+                    allowed = set(audience)
+                except Exception:
+                    allowed = {str(audience)}
+                if role == 'user' and 'user' not in allowed:
+                    continue
+                if role == 'admin' and 'admin' not in allowed and 'user' in allowed:
+                    # admins can also read user docs
+                    pass
+            # else: no audience -> include for all
+
+            # always include both scopes but mark legacy later
+            filtered.append(doc)
+        return filtered
+
+    def _mark_legacy_in_context(self, docs: List[Document]) -> str:
+        blocks: List[str] = []
+        for doc in docs:
+            is_legacy = False
+            scope = doc.metadata.get('scope') if isinstance(doc.metadata, dict) else None
+            if scope and ('legacy_billing' in scope if isinstance(scope, list) else scope == 'legacy_billing'):
+                is_legacy = True
+            prefix = "[LEGACY] " if is_legacy else ""
+            blocks.append(prefix + doc.page_content)
+        return "\n\n".join(blocks)
+
+    def get_response(self, question: str, role: str = 'user') -> str:
+        """Get response for a question using RAG with role-based filtering and legacy marking"""
+        default_prompt = (
+            "Ты - эксперт по личному кабинету системы спутниковой связи СТЭККОМ. Твоя задача - помогать пользователям разобраться с работой системы.\n\n"
+            "КОНТЕКСТ:\n{context}\n\nРОЛЬ ПОЛЬЗОВАТЕЛЯ: {role}\n\nПРАВИЛА ОТВЕТА:\n1. Отвечай ТОЛЬКО на русском языке\n2. Будь подробным, но кратким\n3. Если вопрос о том, как что-то сделать - дай пошаговую инструкцию\n"
+            "4. Если вопрос о возможностях системы - перечисли актуальные функции текущего личного кабинета\n5. Если вопрос о примерах запросов - приведи конкретные примеры\n6. Если вопрос о проблемах - предложи решения\n7. Если не знаешь ответа - честно скажи об этом\n"
+            "8. Используй информацию из контекста\n9. Не выдумывай информацию\n10. Явно помечай материалы по наследной/старой системе как [LEGACY] и поясняй, что они не относятся к текущему ЛК\n\n"
+            "СТРУКТУРА ОТВЕТА:\n- Краткий ответ на вопрос\n- Пошаговые инструкции (если применимо)\n- Примеры (если применимо)\n- Дополнительные советы (если применимо)\n\nВОПРОС ПОЛЬЗОВАТЕЛЯ: {question}\n\nОТВЕТ:"
+        )
+        template = self._load_prompt("resources/prompts/assistant_prompt.txt", default_prompt)
+        prompt = ChatPromptTemplate.from_template(template)
+
+        try:
+            # Retrieve and filter documents by role
             relevant_docs = self.vectorstore.as_retriever().get_relevant_documents(question)
-            
-            # Format documents into context
-            context = self.format_docs(relevant_docs)
-            
-            # Create and run the chain
+            relevant_docs = self._filter_docs_by_role_and_scope(relevant_docs, role)
+
+            # Format documents with legacy marking
+            context = self._mark_legacy_in_context(relevant_docs)
+
             chain = prompt | self.chat_model | StrOutputParser()
-            
-            # Run the chain with both context and question
             response = chain.invoke({
                 "context": context,
-                "question": question
+                "question": question,
+                "role": role
             })
             
+            # Build citations from filtered documents
+            citations: List[str] = []
+            seen = set()
+            for doc in relevant_docs:
+                meta = doc.metadata if isinstance(doc.metadata, dict) else {}
+                key = (meta.get('kb_file'), meta.get('title'), meta.get('source'))
+                if key in seen:
+                    continue
+                seen.add(key)
+                is_legacy = False
+                scope = meta.get('scope')
+                if scope and ('legacy_billing' in scope if isinstance(scope, list) else scope == 'legacy_billing'):
+                    is_legacy = True
+                prefix = "[LEGACY] " if is_legacy else ""
+                title = meta.get('title') or "KB документ"
+                kb_file = meta.get('kb_file') or meta.get('source') or ""
+                citations.append(f"- {prefix}{title} ({kb_file})")
+                if len(citations) >= 5:
+                    break
+
+            if citations:
+                response += "\n\n---\n**Источники:**\n" + "\n".join(citations)
             return response
         except Exception as e:
             return f"Ошибка получения ответа: {e}"

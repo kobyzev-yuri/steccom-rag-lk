@@ -320,7 +320,9 @@ def render_smart_assistant():
         if assistant_question:
             with st.spinner("Ищу ответ..."):
                 if st.session_state.rag_helper:
-                    response = st.session_state.rag_helper.get_response(assistant_question)
+                    # Determine role for filtering (admin can see user docs too)
+                    role = 'admin' if st.session_state.get('is_staff') else 'user'
+                    response = st.session_state.rag_helper.get_response(assistant_question, role=role)
                     st.session_state.assistant_answer = response
                 else:
                     st.error("Система помощи недоступна. Пожалуйста, обратитесь к администратору.")

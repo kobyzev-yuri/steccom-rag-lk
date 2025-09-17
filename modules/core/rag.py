@@ -7,6 +7,7 @@ import re
 from typing import Optional
 from openai import OpenAI
 from .database import get_database_schema
+from pathlib import Path
 
 # Initialize OpenAI client
 client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
@@ -23,7 +24,8 @@ def generate_sql(question: str, company: Optional[str] = None) -> str:
     # Get current database schema
     schema = get_database_schema()
     
-    prompt = f"""You are a SQLite expert for a satellite communications billing system. Generate a query for the following question {company_context}.
+    # Load externalized prompt template if available
+    default_prompt = """You are a SQLite expert for a satellite communications billing system. Generate a query for the following question {company_context}.
 
 CRITICAL RULES - DO NOT VIOLATE:
 1. NEVER modify, simplify, or shorten the user's question
@@ -115,6 +117,14 @@ IMPORTANT:
 - If user asks for specific month - include month filter
 
 Return the SQL query with understanding comments:"""
+
+    prompt_path = Path("resources/prompts/sql_prompt.txt")
+    if prompt_path.exists():
+        with open(prompt_path, 'r', encoding='utf-8') as f:
+            prompt_template = f.read()
+        prompt = prompt_template.format(company=company or "", question=question)
+    else:
+        prompt = default_prompt
 
     # DEBUG: Print part of the prompt to verify it contains the rules
     print(f"🔍 DEBUG: Prompt contains 'NEVER modify': {'NEVER modify' in prompt}")
