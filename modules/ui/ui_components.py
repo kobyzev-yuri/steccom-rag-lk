@@ -9,6 +9,13 @@ import sqlite3
 from datetime import datetime
 from typing import Optional
 
+# Optional RAG helper import for admin actions
+try:
+    from ..rag.rag_helper import RAGHelper
+    _RAG_AVAILABLE = True
+except Exception:
+    _RAG_AVAILABLE = False
+
 from ..core.database import execute_standard_query, execute_query
 from ..core.rag import generate_sql
 from ..core.utils import display_query_results
@@ -443,4 +450,134 @@ def render_staff_view():
     
     with tab3:
         st.header("Admin Panel")
-        st.write("Administrative functions will be implemented here.")
+        st.write("Administrative functions.")
+
+        st.subheader("RAG Management")
+        col_a, col_b = st.columns(2)
+        with col_a:
+            if st.button("🔄 Перезагрузить RAG систему", key="admin_reload_rag"):
+                if _RAG_AVAILABLE:
+                    try:
+                        st.session_state.rag_helper = RAGHelper()
+                        st.session_state.rag_initialized = True
+                        st.success("RAG система перезагружена")
+                    except Exception as e:
+                        st.error(f"Ошибка перезагрузки RAG: {e}")
+                else:
+                    st.error("RAGHelper недоступен на этом окружении")
+        with col_b:
+            if st.button("📚 Проверить доступные KB", key="admin_list_kb"):
+                try:
+                    import glob
+                    kb_files = sorted(glob.glob("docs/kb/*.json"))
+                    if kb_files:
+                        st.write("Найденные KB файлы:")
+                        for f in kb_files:
+                            st.write(f"• {f}")
+                    else:
+                        st.info("KB файлы в docs/kb/ не найдены")
+                except Exception as e:
+                    st.error(f"Ошибка проверки KB: {e}")
+
+        st.markdown("---")
+        st.subheader("KB Files Management")
+        try:
+            import glob
+            import os
+            import json
+            kb_files = sorted(glob.glob("docs/kb/*.json"))
+            selected_kb = st.selectbox("Выберите KB для действий:", ["—"] + kb_files, key="kb_select")
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("🗑️ Удалить выбранный KB", key="kb_delete"):
+                    if selected_kb != "—":
+                        try:
+                            os.remove(selected_kb)
+                            st.success(f"Удален: {selected_kb}")
+                        except Exception as e:
+                            st.error(f"Ошибка удаления: {e}")
+                    else:
+                        st.info("Выберите файл для удаления")
+            with col2:
+                if st.button("🔄 Обновить список", key="kb_refresh_list"):
+                    st.rerun()
+
+            st.markdown("### Создать/обновить KB")
+            new_name = st.text_input("Имя файла (docs/kb/*.json)", value="docs/kb/new_kb.json", key="kb_new_name")
+            default_payload = '[\n  {\n    "title": "Пример KB",\n    "audience": ["user", "admin"],\n    "scope": ["legacy_billing"],\n    "status": "reference",\n    "source": {"file": "data/uploads/reg_07032015.pdf", "pointer": "п.9"},\n    "content": [\n      {"title": "Услуга детализированного отчета", "text": "Раздел регламента…"}\n    ]\n  }\n]'
+            payload = st.text_area("Содержимое JSON", height=240, value=default_payload, key="kb_payload")
+            if st.button("💾 Создать/Обновить", key="kb_save"):
+                try:
+                    # Validate JSON
+                    data = json.loads(payload)
+                    # Ensure correct path
+                    if not new_name.startswith("docs/kb/") or not new_name.endswith('.json'):
+                        st.error("Файл должен быть внутри docs/kb/ и иметь расширение .json")
+                    else:
+                        os.makedirs("docs/kb", exist_ok=True)
+                        with open(new_name, 'w', encoding='utf-8') as f:
+                            json.dump(data, f, ensure_ascii=False, indent=2)
+                        st.success(f"Сохранено: {new_name}")
+                except Exception as e:
+                    st.error(f"Ошибка сохранения: {e}")
+        except Exception as e:
+            st.error(f"Ошибка управления KB: {e}")
+
+        st.markdown("---")
+        st.subheader("PDF Uploads → KB (Legacy)")
+        try:
+            import os
+            os.makedirs("data/uploads", exist_ok=True)
+            uploaded = st.file_uploader("Загрузить PDF (сохранится в data/uploads)", type=["pdf"], key="kb_pdf_uploader")
+            if uploaded is not None:
+                pdf_path = os.path.join("data/uploads", uploaded.name)
+                with open(pdf_path, 'wb') as f:
+                    f.write(uploaded.getbuffer())
+                st.success(f"Загружено: {pdf_path}")
+
+            # List current uploads
+            import glob as _glob
+            pdfs = sorted(_glob.glob("data/uploads/*.pdf"))
+            if pdfs:
+                st.write("Загруженные PDF:")
+                st.write("\n".join([f"• {p}" for p in pdfs]))
+            else:
+                st.info("В data/uploads нет PDF")
+
+            st.markdown("### Создать KB из PDF (ссылочный, LEGACY)")
+            sel_pdf = st.selectbox("PDF источник:", ["—"] + pdfs, key="pdf_select_for_kb")
+            kb_title = st.text_input("Заголовок KB", value="Услуга детализированного отчета (регламент)", key="pdf_kb_title")
+            pointer = st.text_input("Указатель в документе (например, 'п.9')", value="п.9", key="pdf_pointer")
+            audience = st.multiselect("Аудитория", ["user", "admin"], default=["user", "admin"], key="pdf_audience")
+            status = st.selectbox("Статус", ["reference", "released", "preview", "deprecated"], index=0, key="pdf_status")
+            target_json = st.text_input("Имя KB файла", value="docs/kb/legacy_reglament.json", key="pdf_target_json")
+
+            if st.button("📄 Сгенерировать KB JSON", key="pdf_create_kb_json"):
+                try:
+                    if sel_pdf == "—":
+                        st.error("Выберите PDF источник")
+                    elif not target_json.startswith("docs/kb/") or not target_json.endswith('.json'):
+                        st.error("Имя файла должно быть в docs/kb/ и .json")
+                    else:
+                        payload = [
+                            {
+                                "title": kb_title,
+                                "audience": audience,
+                                "scope": ["legacy_billing"],
+                                "status": status,
+                                "source": {"file": sel_pdf, "pointer": pointer},
+                                "content": [
+                                    {"title": kb_title, "text": f"См. {pointer} в {sel_pdf}."}
+                                ]
+                            }
+                        ]
+                        import json as _json
+                        os.makedirs("docs/kb", exist_ok=True)
+                        with open(target_json, 'w', encoding='utf-8') as f:
+                            _json.dump(payload, f, ensure_ascii=False, indent=2)
+                        st.success(f"Создан KB: {target_json}")
+                        st.info("Нажмите 'Перезагрузить RAG систему' выше, чтобы подхватить изменения")
+                except Exception as e:
+                    st.error(f"Ошибка генерации KB: {e}")
+        except Exception as e:
+            st.error(f"Ошибка загрузки PDF/создания KB: {e}")

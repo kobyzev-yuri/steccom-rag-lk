@@ -1,0 +1,23 @@
+[
+  {
+    "title": "Регламент на услугу мониторинг",
+    "audience": [
+      "user",
+      "admin"
+    ],
+    "scope": [
+      "legacy_billing"
+    ],
+    "status": "reference",
+    "source": {
+      "file": "data/uploads/reg_07032015.pdf",
+      "pointer": ""
+    },
+    "content": [
+      {
+        "title": "Регламент на услугу мониторинг",
+        "text": "См.  в data/uploads/reg_07032015.pdf."
+      }
+    ]
+  }
+]
