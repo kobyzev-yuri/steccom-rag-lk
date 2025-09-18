@@ -52,3 +52,7 @@ dist/
 *.key
 *.pem
 *.crt
+*mediawiki_db/mediawiki.sqlite
+
+# MediaWiki runtime DBs
+mediawiki_db/*.sqlite

@@ -4,6 +4,8 @@ Refactored version with modular structure
 """
 
 import streamlit as st
+import logging
+from logging.handlers import RotatingFileHandler
 import sqlite3
 import pandas as pd
 from datetime import datetime
@@ -28,6 +30,31 @@ from modules.ui import render_user_view, render_staff_view
 
 # Initialize OpenAI client
 client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
+
+# Configure application logging (file + console)
+def _configure_logging() -> None:
+    try:
+        os.makedirs("logs", exist_ok=True)
+        log_path = os.path.join("logs", "app.log")
+        logger = logging.getLogger()
+        logger.setLevel(logging.INFO)
+
+        # Avoid adding multiple handlers on reruns
+        if not any(isinstance(h, RotatingFileHandler) for h in logger.handlers):
+            fh = RotatingFileHandler(log_path, maxBytes=2_000_000, backupCount=3, encoding='utf-8')
+            fh.setLevel(logging.INFO)
+            fmt = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s')
+            fh.setFormatter(fmt)
+            logger.addHandler(fh)
+
+        if not any(isinstance(h, logging.StreamHandler) and not isinstance(h, RotatingFileHandler) for h in logger.handlers):
+            ch = logging.StreamHandler()
+            ch.setLevel(logging.INFO)
+            ch.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s'))
+            logger.addHandler(ch)
+    except Exception as e:
+        # Last resort print to avoid breaking the app initialization
+        print(f"Logging configuration failed: {e}")
 
 
 def initialize_session_state():
@@ -140,6 +167,18 @@ def login_page():
             if username and password:
                 success, role, company = verify_login(username, password)
                 if success:
+                    # Reset per-user UI/session state to avoid leakage across logins
+                    ui_keys = [
+                        'current_report_type', 'current_user_question', 'current_assistant_question',
+                        'current_sql_query', 'current_query_explanation', 'current_query_results',
+                        'assistant_answer', 'chart_widget_counter', 'download_widget_counter',
+                        'plotly_chart_counter'
+                    ]
+                    for k in ui_keys:
+                        if k in st.session_state:
+                            del st.session_state[k]
+
+                    # Set authentication state
                     st.session_state.authenticated = True
                     st.session_state.username = username
                     st.session_state.role = role
@@ -155,11 +194,21 @@ def login_page():
 
 def main():
     """Main application function"""
+    # Configure logging early
+    _configure_logging()
     # Initialize database
     init_db()
     
     # Initialize session state
     initialize_session_state()
+    
+    # Hide Streamlit main menu (including Clear cache)
+    st.markdown("""
+    <style>
+    [data-testid="stMainMenu"] {visibility: hidden;}
+    #MainMenu {visibility: hidden;}
+    </style>
+    """, unsafe_allow_html=True)
     
     # Initialize RAG system
     if not st.session_state.rag_initialized:
@@ -189,12 +238,17 @@ def main():
     
     # Logout button
     if st.sidebar.button("🚪 Выйти"):
-        # Clear only authentication-related session state
-        auth_keys = ['authenticated', 'username', 'role', 'company', 'is_staff']
-        for key in auth_keys:
+        # Clear authentication-related and per-user UI session state
+        keys_to_clear = [
+            'authenticated', 'username', 'role', 'company', 'is_staff',
+            'current_report_type', 'current_user_question', 'current_assistant_question',
+            'current_sql_query', 'current_query_explanation', 'current_query_results',
+            'assistant_answer', 'chart_widget_counter', 'download_widget_counter',
+            'plotly_chart_counter'
+        ]
+        for key in keys_to_clear:
             if key in st.session_state:
                 del st.session_state[key]
-        # Don't use st.rerun() to avoid cache issues
         st.rerun()
 
 

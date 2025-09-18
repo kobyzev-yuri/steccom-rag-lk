@@ -28,17 +28,14 @@ STANDARD_QUERIES = {
         d.device_type as type,
         d.model as model,
         d.activated_at as activation_date,
-        st.name as service_type,
-        st.unit as unit,
-        SUM(b.usage_amount) as total_usage,
-        ROUND(SUM(b.amount), 2) as total_amount
+        COALESCE(SUM(b.usage_amount), 0) as total_usage,
+        ROUND(COALESCE(SUM(b.amount), 0), 2) as total_amount
     FROM devices d
     LEFT JOIN billing_records b ON d.imei = b.imei
-    LEFT JOIN service_types st ON b.service_type_id = st.id
     JOIN users u ON d.user_id = u.id
     WHERE u.company = ?
-    GROUP BY d.imei, st.name, st.unit
-    ORDER BY d.imei, st.name;
+    GROUP BY d.imei, d.device_type, d.model, d.activated_at
+    ORDER BY d.imei;
     """,
     
     "Current month usage": """

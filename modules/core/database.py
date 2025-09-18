@@ -259,6 +259,23 @@ def _generate_sample_traffic_data(cursor, arctic_agreement_id, desert_agreement_
                     INSERT OR IGNORE INTO billing_records (agreement_id, imei, service_type_id, billing_date, usage_amount, amount, paid)
                     VALUES (?, ?, 2, ?, ?, ?, 1)
                     ''', (arctic_agreement_id, '123456789012346', f"2025-{month:02d}-28", daily_usage, amount))
+
+        # Arctic Research Station - VSAT Voice sessions (use same VSAT device)
+        for day in range(1, 29):
+            if random.random() > 0.6:  # 40% chance of calls activity
+                # Generate 1-3 voice sessions per day, 1-30 minutes each
+                num_calls = random.randint(1, 3)
+                for _ in range(num_calls):
+                    start_hour = random.randint(8, 22)
+                    call_minutes = random.randint(1, 30)
+                    session_start = f"2025-{month:02d}-{day:02d} {start_hour:02d}:{random.randint(0,59):02d}:00"
+                    # End time is start + call_minutes
+                    session_end_dt = datetime.strptime(session_start, "%Y-%m-%d %H:%M:%S") + timedelta(minutes=call_minutes)
+                    session_end = session_end_dt.strftime("%Y-%m-%d %H:%M:%S")
+                    cursor.execute('''
+                    INSERT OR IGNORE INTO sessions (imei, service_type_id, session_start, session_end, usage_amount)
+                    VALUES (?, 3, ?, ?, ?)
+                    ''', ('123456789012346', session_start, session_end, call_minutes))
         
         # Desert Observatory - VSAT device (223456789012345)
         for day in range(1, 29):
@@ -287,6 +304,21 @@ def _generate_sample_traffic_data(cursor, arctic_agreement_id, desert_agreement_
                     INSERT OR IGNORE INTO billing_records (agreement_id, imei, service_type_id, billing_date, usage_amount, amount, paid)
                     VALUES (?, ?, 2, ?, ?, ?, 1)
                     ''', (desert_agreement_id, '223456789012345', f"2025-{month:02d}-28", daily_usage, amount))
+
+        # Desert Observatory - VSAT Voice sessions
+        for day in range(1, 29):
+            if random.random() > 0.65:  # 35% chance of calls activity
+                num_calls = random.randint(1, 4)
+                for _ in range(num_calls):
+                    start_hour = random.randint(7, 23)
+                    call_minutes = random.randint(2, 45)
+                    session_start = f"2025-{month:02d}-{day:02d} {start_hour:02d}:{random.randint(0,59):02d}:00"
+                    session_end_dt = datetime.strptime(session_start, "%Y-%m-%d %H:%M:%S") + timedelta(minutes=call_minutes)
+                    session_end = session_end_dt.strftime("%Y-%m-%d %H:%M:%S")
+                    cursor.execute('''
+                    INSERT OR IGNORE INTO sessions (imei, service_type_id, session_start, session_end, usage_amount)
+                    VALUES (?, 3, ?, ?, ?)
+                    ''', ('223456789012345', session_start, session_end, call_minutes))
 
 
 def verify_login(username: str, password: str) -> Tuple[bool, Optional[str], Optional[str]]:
@@ -365,3 +397,109 @@ def execute_query(query: str, params: Tuple = ()) -> Tuple[pd.DataFrame, Optiona
         return df, None
     except Exception as e:
         return pd.DataFrame(), str(e)
+
+
+def generate_vsat_voice_sample_sessions() -> Tuple[int, Optional[str]]:
+    """Generate sample VSAT_VOICE sessions for 2025 for existing VSAT devices.
+    Returns (inserted_count, error).
+    """
+    try:
+        conn = sqlite3.connect('satellite_billing.db')
+        cursor = conn.cursor()
+        # Find VSAT devices from existing users
+        cursor.execute("""
+            SELECT d.imei
+            FROM devices d
+            WHERE d.device_type = 'VSAT'
+        """)
+        devices = [row[0] for row in cursor.fetchall()]
+        if not devices:
+            conn.close()
+            return 0, "Нет VSAT-устройств для генерации сессий"
+        inserted = 0
+        for month in range(1, 13):
+            for imei in devices:
+                for day in range(1, 29):
+                    # 35-45% chance of call activity per day
+                    if random.random() > 0.6:
+                        num_calls = random.randint(1, 4)
+                        for _ in range(num_calls):
+                            start_hour = random.randint(7, 23)
+                            call_minutes = random.randint(2, 45)
+                            session_start = f"2025-{month:02d}-{day:02d} {start_hour:02d}:{random.randint(0,59):02d}:00"
+                            session_end_dt = datetime.strptime(session_start, "%Y-%m-%d %H:%M:%S") + timedelta(minutes=call_minutes)
+                            session_end = session_end_dt.strftime("%Y-%m-%d %H:%M:%S")
+                            cursor.execute(
+                                """
+                                INSERT OR IGNORE INTO sessions (imei, service_type_id, session_start, session_end, usage_amount)
+                                VALUES (?, 3, ?, ?, ?)
+                                """,
+                                (imei, session_start, session_end, call_minutes),
+                            )
+                            inserted += 1
+        # Also ensure VSAT_VOICE agreements and create monthly billing records from sessions
+        # 1) Ensure each user has a VSAT_VOICE agreement (use tariff_id 5 by default)
+        cursor.execute("SELECT id FROM tariffs WHERE service_type_id = 3 ORDER BY id LIMIT 1")
+        row = cursor.fetchone()
+        voice_tariff_id = row[0] if row else 5
+        # Map device -> user_id
+        cursor.execute("SELECT imei, user_id FROM devices WHERE device_type = 'VSAT'")
+        dev_user = dict(cursor.fetchall())
+        # Ensure agreements per user
+        user_to_voice_agreement: Dict[int, int] = {}
+        for user_id in set(dev_user.values()):
+            cursor.execute(
+                """
+                SELECT id FROM agreements 
+                WHERE user_id = ? AND tariff_id IN (SELECT id FROM tariffs WHERE service_type_id = 3) AND status = 'active'
+                """,
+                (user_id,),
+            )
+            r = cursor.fetchone()
+            if r:
+                user_to_voice_agreement[user_id] = r[0]
+            else:
+                # Create new agreement for 2025
+                cursor.execute(
+                    """
+                    INSERT INTO agreements (user_id, tariff_id, start_date, end_date, status)
+                    VALUES (?, ?, '2025-01-01', '2025-12-31', 'active')
+                    """,
+                    (user_id, voice_tariff_id),
+                )
+                user_to_voice_agreement[user_id] = cursor.lastrowid
+        # 2) Build monthly aggregates from sessions and create billing_records
+        # Get tariff price_per_unit
+        cursor.execute("SELECT price_per_unit FROM tariffs WHERE id = ?", (voice_tariff_id,))
+        price_row = cursor.fetchone()
+        price_per_min = float(price_row[0]) if price_row else 0.4
+        # Aggregate minutes per device per month
+        cursor.execute(
+            """
+            SELECT d.user_id, s.imei, strftime('%Y-%m', s.session_start) AS month, SUM(s.usage_amount) AS total_minutes
+            FROM sessions s
+            JOIN devices d ON s.imei = d.imei
+            WHERE s.service_type_id = 3 AND strftime('%Y', s.session_start) = '2025'
+            GROUP BY d.user_id, s.imei, strftime('%Y-%m', s.session_start)
+            """
+        )
+        aggregates = cursor.fetchall()
+        for user_id, imei, ym, minutes in aggregates:
+            agreement_id = user_to_voice_agreement.get(user_id)
+            if not agreement_id:
+                continue
+            # Use last day of month (28th for simplicity)
+            billing_date = f"{ym}-28"
+            amount = round(float(minutes) * price_per_min, 2)
+            cursor.execute(
+                """
+                INSERT OR IGNORE INTO billing_records (agreement_id, imei, service_type_id, billing_date, usage_amount, amount, paid)
+                VALUES (?, ?, 3, ?, ?, ?, 1)
+                """,
+                (agreement_id, imei, billing_date, int(minutes), amount),
+            )
+        conn.commit()
+        conn.close()
+        return inserted, None
+    except Exception as e:
+        return 0, str(e)

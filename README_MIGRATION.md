@@ -74,3 +74,4 @@ TOKEN="<ваш токен>" ./wiki.bash publish \
 ```
 
 
+

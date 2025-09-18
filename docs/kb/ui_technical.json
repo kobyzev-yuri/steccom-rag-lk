@@ -1,0 +1,12 @@
+[
+  {
+    "title": "Техническая информация",
+    "audience": ["user", "admin"],
+    "scope": ["current_billing"],
+    "status": "reference",
+    "content": [
+      {"title": "Структура данных", "text": "Таблицы: users, devices, sessions, billing_records и др."}
+    ]
+  }
+]
+

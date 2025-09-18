@@ -16,7 +16,6 @@ client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
 def generate_sql(question: str, company: Optional[str] = None) -> str:
     """Generate SQL query from natural language question."""
     # DEBUG: Print the original question
-    print(f"🔍 DEBUG: Original question: '{question}'")
     
     # Add company context if provided
     company_context = f"for the company '{company}'" if company else "across all companies"
@@ -36,6 +35,11 @@ CRITICAL RULES - DO NOT VIOLATE:
 6. Do NOT make assumptions or "improvements" to the user's request
 7. If you need to interpret the question, add a comment in SQL explaining your understanding
 8. NEVER change the user's intent - only translate it to SQL
+9. If the user asks to show traffic (usage) totals, you MUST:
+   - Include service_types.name as service_type and service_types.unit as unit in SELECT
+   - Group by service_type (and unit) to avoid mixing different services
+   - NEVER sum usage across different service types without grouping by service_type
+10. DATE DEFAULTS: If the user does NOT specify a year or month, default to the CURRENT year/month based on SQLite now(). For example, for yearly scope use strftime('%Y', ...) = strftime('%Y', 'now'), for monthly scope use strftime('%Y-%m', ...) = strftime('%Y-%m', 'now').
 
 {schema}
 
@@ -51,6 +55,7 @@ Key Information:
    - Monthly totals: GROUP BY strftime('%Y-%m', billing_date)
    - Money totals: ROUND(SUM(amount), 2)
    - Service types: SBD (KB), VSAT_DATA (MB), VSAT_VOICE (minutes)
+   - IMPORTANT: Do NOT aggregate usage across different service types; always include st.name and st.unit in SELECT and GROUP BY when summing usage
 
 3. Table Relationships:
    billing_records -> agreements (agreement_id)
@@ -126,9 +131,11 @@ Return the SQL query with understanding comments:"""
     else:
         prompt = default_prompt
 
+    # If no company is specified (operator across all companies), enforce instruction not to add company filter
+    if not company:
+        prompt += "\n\nOPERATOR SCOPE: The question is across ALL companies. DO NOT add any filter by u.company."
+
     # DEBUG: Print part of the prompt to verify it contains the rules
-    print(f"🔍 DEBUG: Prompt contains 'NEVER modify': {'NEVER modify' in prompt}")
-    print(f"🔍 DEBUG: Prompt contains 'SBD filter': {'SBD filter' in prompt}")
 
     response = client.chat.completions.create(
         model="qwen3:8b",
@@ -138,7 +145,6 @@ Return the SQL query with understanding comments:"""
     )
     
     raw_response = response.choices[0].message.content.strip()
-    print(f"🔍 DEBUG: Raw LLM response: '{raw_response[:200]}...'")
     
     query = raw_response
     
@@ -150,9 +156,7 @@ Return the SQL query with understanding comments:"""
     if "<think>" in query:
         think_start = query.find("<think>")
         query = query[:think_start].strip()
-        print(f"🔍 DEBUG: After removing incomplete <think>: '{query[:200]}...'")
     
-    print(f"🔍 DEBUG: After removing <think> blocks: '{query[:200]}...'")
     
     # Remove any markdown formatting
     if query.startswith("```"):
@@ -163,7 +167,129 @@ Return the SQL query with understanding comments:"""
         query = query.rsplit("```", 1)[0]
     
     final_query = query.strip()
-    print(f"🔍 DEBUG: Final SQL query: '{final_query[:200]}...'")
-    print(f"🔍 DEBUG: Contains 'SBD': {'SBD' in final_query}")
     
+    # Post-process: if no company is specified, strip accidental filters like u.company = ''
+    if not company:
+        import re as _re
+        # Remove patterns WHERE/AND u.company = '' (with optional spaces/quotes)
+        patterns = [
+            r"\bWHERE\s+u\.company\s*=\s*''\s*AND\s*",
+            r"\bAND\s+u\.company\s*=\s*''\s*",
+            r"\bWHERE\s+u\.company\s*=\s*''\s*",
+            r"\bWHERE\s+u\.company\s*=\s*\"\"\s*AND\s*",
+            r"\bAND\s+u\.company\s*=\s*\"\"\s*",
+            r"\bWHERE\s+u\.company\s*=\s*\"\"\s*",
+        ]
+        cleaned = final_query
+        for pat in patterns:
+            cleaned = _re.sub(pat, lambda m: "WHERE " if "WHERE" in m.group(0) and "AND" in m.group(0) else "", cleaned, flags=_re.IGNORECASE)
+        # Clean possible trailing WHERE with no condition
+        cleaned = _re.sub(r"\bWHERE\s*$", "", cleaned, flags=_re.IGNORECASE | _re.MULTILINE)
+        final_query = cleaned.strip()
+
+    # Post-process: replace unsupported strftime('%Q') with computed quarter label
+    try:
+        import re as _re
+        # Replace strftime('%Y-%Q', <date_expr>) with 'YYYY-Qn'
+        def repl_year_quarter(m):
+            date_expr = m.group(1)
+            return (
+                "(strftime('%Y', " + date_expr + ") || '-Q' || "
+                "CAST(((CAST(strftime('%m', " + date_expr + ") AS INTEGER)-1) / 3 + 1) AS INTEGER))"
+            )
+        final_query = _re.sub(r"strftime\('%Y-%Q',\s*(.*?)\)", repl_year_quarter, final_query)
+
+        # Replace standalone strftime('%Q', <date_expr>) with quarter number 1..4
+        def repl_quarter(m):
+            date_expr = m.group(1)
+            return (
+                "CAST(((CAST(strftime('%m', " + date_expr + ") AS INTEGER)-1) / 3 + 1) AS INTEGER)"
+            )
+        final_query = _re.sub(r"strftime\('%Q',\s*(.*?)\)", repl_quarter, final_query)
+
+        # If someone labels quarter as just year, upgrade to proper YYYY-Qn
+        # Pattern: strftime('%Y', <date_expr>) as quarter
+        def repl_year_as_quarter(m):
+            date_expr = m.group(1)
+            return (
+                "(strftime('%Y', " + date_expr + ") || '-Q' || "
+                "CAST(((CAST(strftime('%m', " + date_expr + ") AS INTEGER)-1) / 3 + 1) AS INTEGER)) as quarter"
+            )
+        final_query = _re.sub(r"strftime\('%Y'\s*,\s*(.*?)\)\s+as\s+quarter", repl_year_as_quarter, final_query, flags=_re.IGNORECASE)
+    except Exception:
+        pass
+
+    # Heuristic fix: ensure grouping by service_type for traffic totals
+    try:
+        import re as _re
+        q = final_query
+        # Trigger only if summing usage and querying billing_records
+        if _re.search(r"SUM\s*\(\s*\w*usage_amount\s*\)", q, _re.IGNORECASE) and _re.search(r"FROM\s+billing_records\s+\w+|FROM\s+billing_records\b", q, _re.IGNORECASE):
+            # Skip if service_type already present
+            if not _re.search(r"\bservice_type\b", q, _re.IGNORECASE):
+                # Find alias for billing_records
+                m = _re.search(r"FROM\s+billing_records\s+(\w+)", q, _re.IGNORECASE)
+                alias = m.group(1) if m else "b"
+                # Ensure JOIN service_types exists
+                if not _re.search(r"JOIN\s+service_types\s+st\b", q, _re.IGNORECASE):
+                    # Insert JOIN before WHERE or GROUP BY
+                    if "WHERE" in q:
+                        q = _re.sub(r"\bWHERE\b", f"JOIN service_types st ON {alias}.service_type_id = st.id\nWHERE", q, count=1, flags=_re.IGNORECASE)
+                    elif "GROUP BY" in q:
+                        q = _re.sub(r"\bGROUP BY\b", f"JOIN service_types st ON {alias}.service_type_id = st.id\nGROUP BY", q, count=1, flags=_re.IGNORECASE)
+                    else:
+                        q = q + f"\nJOIN service_types st ON {alias}.service_type_id = st.id"
+                # Inject st.name as service_type into SELECT
+                q = _re.sub(r"SELECT\s+", "SELECT st.name as service_type, ", q, count=1, flags=_re.IGNORECASE)
+                # Add st.name to GROUP BY if exists
+                if "GROUP BY" in q:
+                    q = _re.sub(r"GROUP BY\s+", "GROUP BY st.name, ", q, count=1, flags=_re.IGNORECASE)
+                final_query = q
+    except Exception:
+        pass
+ 
+    # Heuristic fix: normalize stray past years to CURRENT year where a year literal is used
+    try:
+        import re as _re
+        # Replace '2023'/'2024' single-year literals with strftime('%Y','now') comparisons when used with strftime('%Y', ...)
+        # strftime('%Y', X) IN ('2023','2024') -> strftime('%Y', X) = strftime('%Y','now')
+        final_query = _re.sub(r"strftime\('\%Y',\s*([^)]+)\)\s+IN\s*\('\d{4}'(?:,\s*'\d{4}')*\)", r"strftime('%Y', \1) = strftime('%Y','now')", final_query, flags=_re.IGNORECASE)
+        # strftime('%Y', X) = '2023' -> strftime('%Y', X) = strftime('%Y','now')
+        final_query = _re.sub(r"strftime\('\%Y',\s*([^)]+)\)\s*=\s*'\d{4}'", r"strftime('%Y', \1) = strftime('%Y','now')", final_query, flags=_re.IGNORECASE)
+        # For monthly strings 'YYYY-MM' with old years, coerce to current month
+        final_query = _re.sub(r"strftime\('\%Y-\%m',\s*([^)]+)\)\s*=\s*'\d{4}-\d{2}'", r"strftime('%Y-%m', \1) = strftime('%Y-%m','now')", final_query, flags=_re.IGNORECASE)
+    except Exception:
+        pass
+
+    # Heuristic fix: if there is a YEAR filter but no monthly breakdown, add month grouping
+    try:
+        import re as _re
+        q = final_query
+        # Detect billing_records presence and its alias
+        m_from = _re.search(r"FROM\s+billing_records\s+(\w+)|FROM\s+billing_records\b", q, _re.IGNORECASE)
+        br_alias = None
+        if m_from:
+            if m_from.group(1):
+                br_alias = m_from.group(1)
+            else:
+                br_alias = 'b'
+        if br_alias:
+            # Check for a year filter on billing_date
+            has_year_filter = _re.search(r"strftime\('\%Y',\s*" + br_alias + r"\.billing_date\s*\)", q, _re.IGNORECASE) is not None
+            has_month_group = _re.search(r"strftime\('\%Y-\%m',\s*" + br_alias + r"\.billing_date\s*\)", q, _re.IGNORECASE) is not None
+            if has_year_filter and not has_month_group:
+                # Inject month into SELECT
+                q = _re.sub(r"SELECT\s+", "SELECT strftime('%Y-%m', " + br_alias + ".billing_date) as month, ", q, count=1, flags=_re.IGNORECASE)
+                # Prepend month into GROUP BY if exists, else create it
+                if "GROUP BY" in q:
+                    q = _re.sub(r"GROUP BY\s+", "GROUP BY strftime('%Y-%m', " + br_alias + ".billing_date), ", q, count=1, flags=_re.IGNORECASE)
+                else:
+                    q += "\nGROUP BY strftime('%Y-%m', " + br_alias + ".billing_date)"
+                # Prefer ordering by month first if ORDER BY exists and no month
+                if "ORDER BY" in q and not _re.search(r"\border\s+by[^\n]*month", q, _re.IGNORECASE):
+                    q = _re.sub(r"ORDER BY\s+", "ORDER BY month, ", q, count=1, flags=_re.IGNORECASE)
+                final_query = q
+    except Exception:
+        pass
+
     return final_query

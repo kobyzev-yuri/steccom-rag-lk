@@ -8,6 +8,7 @@ import pandas as pd
 import sqlite3
 from datetime import datetime
 from typing import Optional
+import plotly.express as px
 
 # Optional RAG helper import for admin actions
 try:
@@ -64,10 +65,24 @@ def render_user_view():
         render_help()
 
 
-def render_standard_reports():
+def render_standard_reports(company_override: Optional[str] = None):
     """Render standard reports page"""
     st.subheader("📊 Стандартные отчеты")
     st.write("Выберите готовый отчет из списка ниже:")
+    
+    # For staff: inline company selector (with All Companies)
+    if st.session_state.is_staff:
+        try:
+            companies_query = "SELECT DISTINCT company FROM users WHERE role = 'user' ORDER BY company"
+            conn = sqlite3.connect('satellite_billing.db')
+            _df_companies = pd.read_sql_query(companies_query, conn)
+            conn.close()
+            company_options = ["All Companies"] + _df_companies['company'].tolist()
+        except Exception:
+            company_options = ["All Companies"]
+        selected_company_sr = st.selectbox("Компания:", company_options, key="standard_reports_company_selector")
+        # Prefer inline selector over external override
+        company_override = selected_company_sr
     
     # Use session_state for report type
     report_type = st.selectbox(
@@ -91,16 +106,37 @@ def render_standard_reports():
         key="report_type"
     )
     
+    # Pre-select chart type before running
+    chart_type_selection = st.selectbox(
+        "Тип графика:",
+        ["line", "bar", "pie", "scatter"],
+        format_func=lambda x: {
+            "line": "📈 Линейный график",
+            "bar": "📊 Столбчатая диаграмма", 
+            "pie": "🥧 Круговая диаграмма",
+            "scatter": "🔍 Точечная диаграмма"
+        }[x],
+        key="standard_chart_type_global"
+    )
+    
     # Update session_state when report type changes
     if report_type != st.session_state.current_report_type:
         st.session_state.current_report_type = report_type
     
     if st.button("Показать отчет", key="show_report"):
-        st.write(f"🔍 DEBUG: Кнопка 'Показать отчет' нажата для: {report_type}")
         with st.spinner("Загрузка отчета..."):
             # Determine user role for access control
             user_role = 'staff' if st.session_state.is_staff else 'user'
-            st.write(f"🔍 DEBUG: Роль пользователя: {user_role}")
+            
+            # Determine target company for query execution
+            if st.session_state.is_staff:
+                # Staff uses inline selector (may be All Companies)
+                if report_type == "Текущий договор" and (company_override is None or company_override == "All Companies"):
+                    st.warning("Для отчета 'Текущий договор' выберите конкретную компанию.")
+                    return
+                company_for_query = company_override if company_override and company_override != "All Companies" else None
+            else:
+                company_for_query = st.session_state.company
             
             if report_type == "Текущий договор":
                 query = STANDARD_QUERIES["Current agreement"]
@@ -144,9 +180,16 @@ def render_standard_reports():
                 query = STANDARD_QUERIES["VSAT_VOICE sessions"]
             
             # Execute query
-            st.write(f"🔍 DEBUG: Выполняем запрос для компании: {st.session_state.company}")
-            df, error = execute_query(query, (st.session_state.company,))
-            st.write(f"🔍 DEBUG: Результат запроса: {type(df)}, ошибка: {error}")
+            if report_type != "Текущий договор" and st.session_state.is_staff and (company_override == "All Companies"):
+                # Remove company filter for aggregated admin view
+                query_to_run = query.replace("WHERE u.company = ?", "WHERE 1=1")
+                df, error = execute_query(query_to_run)
+            else:
+                if st.session_state.is_staff and company_for_query is None:
+                    # Safety fallback (should not happen due to early return)
+                    st.warning("Не выбрана компания для отчета.")
+                    return
+                df, error = execute_query(query, (company_for_query,))
             
             if error:
                 st.error(f"Ошибка выполнения запроса: {error}")
@@ -156,9 +199,6 @@ def render_standard_reports():
                 st.session_state[f"{report_key}_data"] = df
                 st.session_state[f"{report_key}_query"] = query
                 
-                st.write(f"🔍 DEBUG: Данные получены: {df.shape}, колонки: {list(df.columns)}")
-                st.write(f"🔍 DEBUG: DataFrame пустой: {df.empty}")
-                st.write(f"🔍 DEBUG: Первые 3 строки:")
                 st.write(df.head(3))
                 
                 st.markdown("#### Результаты отчета")
@@ -177,30 +217,23 @@ def render_standard_reports():
                         mime="text/csv"
                     )
                 
-                # Chart section - автоматическое построение графика
+                # Chart section - use pre-selected chart type
                 if not df.empty:
                     st.markdown("### 📊 График")
-                    
-                    # Создаем уникальный ключ для этого отчета
-                    chart_key = f"chart_{hash(report_type)}"
-                    
-                    # Выбор типа графика
-                    chart_type = st.selectbox(
-                        "Тип графика:",
-                        ["line", "bar", "pie", "scatter"],
-                        format_func=lambda x: {
-                            "line": "📈 Линейный график",
-                            "bar": "📊 Столбчатая диаграмма", 
-                            "pie": "🥧 Круговая диаграмма",
-                            "scatter": "🔍 Точечная диаграмма"
-                        }[x],
-                        key=f"standard_chart_type_{chart_key}"
-                    )
-                    
-                    # Автоматически строим график
-                    st.write(f"🔍 DEBUG: Автоматически строим график типа: {chart_type}")
-                    st.write(f"🔍 DEBUG: Данные: {df.shape}, колонки: {list(df.columns)}")
-                    create_chart(df, chart_type)
+                    try:
+                        if "service_type" in df.columns and df["service_type"].nunique() > 1:
+                            for svc in df["service_type"].dropna().unique():
+                                st.markdown(f"#### {svc}")
+                                df_svc = df[df["service_type"] == svc]
+                                create_chart(df_svc, chart_type_selection)
+                        else:
+                            # Guard: different units without service_type separation → skip chart
+                            if "unit" in df.columns and df["unit"].nunique() > 1 and "service_type" not in df.columns:
+                                st.warning("Найдено несколько единиц измерения без разделения по типам услуг. Построение общего графика отключено.")
+                            else:
+                                create_chart(df, chart_type_selection)
+                    except Exception as e:
+                        st.warning(f"Не удалось построить график: {e}")
 
 
 def render_custom_query():
@@ -243,8 +276,6 @@ def render_custom_query():
     if st.button("Создать запрос", key="create_query"):
         if user_question:
             # DEBUG: Print the user question before processing
-            print(f"🔍 DEBUG: User question in render_custom_query: '{user_question}'")
-            print(f"🔍 DEBUG: Question length: {len(user_question)}")
             
             with st.spinner("Генерирую запрос..."):
                 # Try to use multi-KB RAG first for enhanced context
@@ -259,7 +290,6 @@ def render_custom_query():
                         st.markdown("---")
                 
                 # Generate SQL query using direct function (preserves full user question)
-                print(f"🔍 DEBUG: About to call generate_sql with: '{user_question}'")
                 query = generate_sql(user_question, st.session_state.company)
                 if query:
                     # Store results in session_state
@@ -278,15 +308,7 @@ def render_custom_query():
         else:
             st.warning("Пожалуйста, введите ваш вопрос.")
     
-    # Display stored results if available
-    if st.session_state.current_query_explanation and st.session_state.current_sql_query:
-        st.markdown("#### Последний запрос")
-        st.markdown("**Объяснение запроса**")
-        st.info(st.session_state.current_query_explanation)
-        st.markdown("**SQL Запрос**")
-        st.code(st.session_state.current_sql_query, language="sql")
-        st.markdown("**Результаты**")
-        display_query_results(st.session_state.current_sql_query)
+    # Note: убрано повторное отображение "Последний запрос", чтобы избежать дублирования
 
 
 def render_smart_assistant():
@@ -383,7 +405,7 @@ def render_staff_view():
     st.title("🔧 Административная панель СТЭККОМ")
     
     # Navigation tabs
-    tab1, tab2, tab3 = st.tabs(["📊 Аналитика трафика", "📋 Стандартные отчеты", "🔧 Админ-панель"])
+    tab1, tab2, tab3 = st.tabs(["📊 Аналитика трафика", "🤖 Умный помощник", "🔧 Админ-панель"])
     
     with tab1:
         # Company selector
@@ -393,62 +415,98 @@ def render_staff_view():
         conn.close()
         
         selected_company = st.selectbox("Select Company:", ["All Companies"] + df['company'].tolist())
+        # Pre-select chart type for analytics
+        chart_type_analytics = st.selectbox(
+            "Chart Type:",
+            ["line", "bar", "pie", "scatter"],
+            key="staff_chart_type_analytics"
+        )
     
-    # AI Query Assistant
-    st.header("AI Query Assistant")
-    user_question = st.text_area(
-        "Ask a question:",
-        placeholder="e.g., Show traffic statistics for last month",
-        height=100
-    )
-    
-    if st.button("Generate Query"):
-        if user_question:
-            with st.spinner("Generating query..."):
-                # Use company filter if specific company selected
-                company_filter = selected_company if selected_company != "All Companies" else None
-                query = generate_sql(user_question, company_filter)
-                
-                if query:
-                    st.markdown("#### Generated SQL Query")
-                    st.code(query, language="sql")
-                    
-                    # Execute and display results
-                    st.markdown("#### Query Results")
-                    if company_filter:
-                        df, error = execute_query(query, (company_filter,))
-                    else:
-                        df, error = execute_query(query)
-                    
-                    if error:
-                        st.error(f"Query execution error: {error}")
-                    else:
-                        st.dataframe(df)
-                        
-                        # Chart
-                        if not df.empty:
-                            st.markdown("#### Chart")
-                            # Создаем уникальный ключ для staff панели
-                            import time
-                            staff_unique_key = f"staff_{int(time.time() * 1000)}"
-                            chart_type = st.selectbox(
-                                "Chart Type:",
-                                ["line", "bar", "pie", "scatter"],
-                                key=f"staff_chart_type_{staff_unique_key}"
-                            )
-                            if st.button("Create Chart", key=f"create_staff_chart_{staff_unique_key}"):
-                                create_chart(df, chart_type)
-                else:
-                    st.error("Failed to generate query. Please try rephrasing your question.")
-        else:
-            st.warning("Please enter a question.")
-    
+    # Smart Assistant tab (RAG-only)
     with tab2:
-        st.header("Standard Reports")
-        # Standard reports functionality for staff
-        render_standard_reports()
-    
+        render_smart_assistant()
+
+    # Admin Panel + SQL Agent
     with tab3:
+        # AI Query Assistant (SQL only)
+        st.header("AI Query Assistant")
+        user_question = st.text_area(
+            "Ask a question:",
+            placeholder="e.g., Show traffic statistics for last month",
+            height=100
+        )
+        
+        if st.button("Generate Query"):
+            if user_question:
+                with st.spinner("Generating query..."):
+                    # Use company filter if specific company selected
+                    company_filter = selected_company if selected_company != "All Companies" else None
+                    query = generate_sql(user_question, company_filter)
+                    
+                    if query:
+                        st.markdown("#### Generated SQL Query")
+                        st.code(query, language="sql")
+                        
+                        # Execute and display results
+                        st.markdown("#### Query Results")
+                        # Pass parameters only if the SQL has placeholders
+                        if company_filter and ("?" in query):
+                            df, error = execute_query(query, (company_filter,))
+                        else:
+                            df, error = execute_query(query)
+                        
+                        if error:
+                            st.error(f"Query execution error: {error}")
+                        else:
+                            st.dataframe(df)
+                            
+                            # Chart
+                            if not df.empty:
+                                st.markdown("#### Chart")
+                                try:
+                                    if chart_type_analytics == "pie" and ("month" in df.columns) and ("company" in df.columns):
+                                        # Render per-month pies with slices per company
+                                        df_local = df.copy()
+                                        # Ensure month label
+                                        try:
+                                            df_local["month_str"] = pd.to_datetime(df_local["month"], errors='coerce').dt.strftime('%Y-%m').fillna(df_local["month"].astype(str))
+                                        except Exception:
+                                            df_local["month_str"] = df_local["month"].astype(str)
+                                        # Determine values column (prefer common metrics)
+                                        value_candidates = ["total_usage", "total_amount", "usage_amount", "total_traffic"]
+                                        values_col = next((c for c in value_candidates if c in df_local.columns), None)
+                                        if values_col is None:
+                                            # fallback to first numeric column
+                                            exclude = {"month", "month_str", "company", "service_type", "unit", "device_id", "imei"}
+                                            numeric_cols = [c for c in df_local.columns if c not in exclude and pd.api.types.is_numeric_dtype(pd.to_numeric(df_local[c], errors='coerce'))]
+                                            values_col = numeric_cols[0] if numeric_cols else None
+                                        for m in df_local["month_str"].dropna().unique():
+                                            st.markdown(f"##### {m}")
+                                            df_m = df_local[df_local["month_str"] == m]
+                                            if values_col is None:
+                                                st.warning("Нет числовой метрики для круговой диаграммы")
+                                            else:
+                                                df_m = df_m.copy()
+                                                df_m[values_col] = pd.to_numeric(df_m[values_col], errors='coerce')
+                                                fig = px.pie(df_m, names="company", values=values_col)
+                                                st.plotly_chart(fig, use_container_width=True)
+                                    elif "service_type" in df.columns and df["service_type"].nunique() > 1:
+                                        for svc in df["service_type"].dropna().unique():
+                                            st.markdown(f"##### {svc}")
+                                            df_svc = df[df["service_type"] == svc]
+                                            create_chart(df_svc, chart_type_analytics)
+                                    else:
+                                        if "unit" in df.columns and df["unit"].nunique() > 1 and "service_type" not in df.columns:
+                                            st.warning("Несколько единиц измерения без разделения по типам услуг. График отключен.")
+                                        else:
+                                            create_chart(df, chart_type_analytics)
+                                except Exception as e:
+                                    st.warning(f"Не удалось построить график: {e}")
+                    else:
+                        st.error("Failed to generate query. Please try rephrasing your question.")
+            else:
+                st.warning("Please enter a question.")
+
         st.header("Admin Panel")
         st.write("Administrative functions.")
 
@@ -478,6 +536,10 @@ def render_staff_view():
                         st.info("KB файлы в docs/kb/ не найдены")
                 except Exception as e:
                     st.error(f"Ошибка проверки KB: {e}")
+
+        st.markdown("---")
+        st.subheader("Data Utilities")
+        st.info("Генерация тестовых VOICE-сессий перенесена в отдельный скрипт: scripts/generate_vsat_voice_data.py")
 
         st.markdown("---")
         st.subheader("KB Files Management")
@@ -524,6 +586,24 @@ def render_staff_view():
             st.error(f"Ошибка управления KB: {e}")
 
         st.markdown("---")
+        st.subheader("Логи приложения")
+        try:
+            import os
+            log_file = os.path.join("logs", "app.log")
+            if os.path.exists(log_file):
+                max_lines = st.slider("Сколько последних строк показать?", min_value=50, max_value=2000, value=500, step=50, key="log_lines")
+                level_filter = st.selectbox("Фильтр по уровню", ["ALL", "ERROR", "WARNING", "INFO"], index=0, key="log_level")
+                with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
+                    lines = f.readlines()[-max_lines:]
+                if level_filter != "ALL":
+                    lines = [ln for ln in lines if f"[{level_filter}]" in ln]
+                st.code("".join(lines) or "(пусто)", language="text")
+            else:
+                st.info("Лог-файл пока не создан.")
+        except Exception as e:
+            st.error(f"Не удалось прочитать логи: {e}")
+
+        st.caption("Примечание: при обнаружении ошибок в логах я сначала сообщу вам, а уже затем предложу исправление.")
         st.subheader("PDF Uploads → KB (Legacy)")
         try:
             import os
@@ -581,3 +661,85 @@ def render_staff_view():
                     st.error(f"Ошибка генерации KB: {e}")
         except Exception as e:
             st.error(f"Ошибка загрузки PDF/создания KB: {e}")
+
+        st.markdown("---")
+        st.subheader("MediaWiki Integration")
+        try:
+            from ..integrations import MediaWikiClient, KBToWikiPublisher
+            
+            # Настройки MediaWiki
+            st.markdown("### Настройки подключения")
+            wiki_url = st.text_input("URL MediaWiki", value="http://localhost:8080/w/api.php", key="wiki_url")
+            wiki_username = st.text_input("Имя пользователя", key="wiki_username")
+            wiki_password = st.text_input("Пароль", type="password", key="wiki_password")
+            namespace_prefix = st.text_input("Префикс пространства имен", value="СТЭККОМ", key="wiki_namespace")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("🔗 Тест подключения", key="wiki_test"):
+                    if wiki_url and wiki_username and wiki_password:
+                        try:
+                            client = MediaWikiClient(wiki_url, wiki_username, wiki_password)
+                            st.success("✅ Подключение к MediaWiki успешно")
+                        except Exception as e:
+                            st.error(f"❌ Ошибка подключения: {e}")
+                    else:
+                        st.warning("Заполните все поля для тестирования")
+            
+            with col2:
+                if st.button("📚 Публиковать все KB", key="wiki_publish_all"):
+                    if wiki_url and wiki_username and wiki_password:
+                        try:
+                            client = MediaWikiClient(wiki_url, wiki_username, wiki_password)
+                            publisher = KBToWikiPublisher(client)
+                            
+                            with st.spinner("Публикация в MediaWiki..."):
+                                results = publisher.publish_all_kb_files("docs/kb", namespace_prefix)
+                                
+                            st.success("Публикация завершена")
+                            
+                            # Показываем результаты
+                            for kb_file, file_results in results.items():
+                                with st.expander(f"📄 {kb_file}"):
+                                    for success, message in file_results:
+                                        if success:
+                                            st.success(f"✅ {message}")
+                                        else:
+                                            st.error(f"❌ {message}")
+                        except Exception as e:
+                            st.error(f"Ошибка публикации: {e}")
+                    else:
+                        st.warning("Заполните настройки подключения")
+            
+            # Публикация отдельных файлов
+            st.markdown("### Публикация отдельных файлов")
+            try:
+                import glob
+                kb_files = sorted(glob.glob("docs/kb/*.json"))
+                selected_kb = st.selectbox("Выберите KB файл:", ["—"] + kb_files, key="wiki_kb_select")
+                
+                if st.button("📤 Публиковать выбранный файл", key="wiki_publish_selected"):
+                    if selected_kb != "—" and wiki_url and wiki_username and wiki_password:
+                        try:
+                            client = MediaWikiClient(wiki_url, wiki_username, wiki_password)
+                            publisher = KBToWikiPublisher(client)
+                            
+                            with st.spinner(f"Публикация {selected_kb}..."):
+                                results = publisher.publish_kb_file(selected_kb, namespace_prefix)
+                            
+                            for success, message in results:
+                                if success:
+                                    st.success(f"✅ {message}")
+                                else:
+                                    st.error(f"❌ {message}")
+                        except Exception as e:
+                            st.error(f"Ошибка публикации: {e}")
+                    else:
+                        st.warning("Выберите файл и заполните настройки")
+            except Exception as e:
+                st.error(f"Ошибка выбора файлов: {e}")
+                
+        except ImportError as e:
+            st.error(f"Модуль MediaWiki недоступен: {e}")
+        except Exception as e:
+            st.error(f"Ошибка MediaWiki интеграции: {e}")

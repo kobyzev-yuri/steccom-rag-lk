@@ -1,0 +1,12 @@
+[
+  {
+    "title": "Примеры запросов",
+    "audience": ["user", "admin"],
+    "scope": ["current_billing"],
+    "status": "reference",
+    "content": [
+      {"title": "Анализ трафика", "text": "Покажи мой трафик за последний месяц; Сравни трафик по неделям."}
+    ]
+  }
+]
+

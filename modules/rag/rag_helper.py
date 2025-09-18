@@ -93,233 +93,8 @@ class RAGHelper:
         """
         documents = []
         
-        # Add comprehensive personal account usage guide
-        lk_guide = """
-        Личный кабинет - Полное руководство пользователя:
-        
-        1. ОСНОВНЫЕ ВОЗМОЖНОСТИ ЛИЧНОГО КАБИНЕТА:
-           
-           Анализ трафика:
-           - Просмотр статистики потребления трафика по дням, неделям, месяцам
-           - Анализ трафика по устройствам
-           - Сравнение трафика за разные периоды
-           - Выявление пиковых нагрузок
-           
-           Управление договорами:
-           - Просмотр текущих договоров и их условий
-           - Информация о тарифных планах
-           - История договоров
-           - Сроки действия договоров
-           
-           Мониторинг устройств:
-           - Список всех подключенных устройств
-           - Статус устройств (активные/неактивные)
-           - Информация о моделях и типах устройств
-           - История активации устройств
-        
-        2. КАК РАБОТАТЬ С ОТЧЕТАМИ:
-           
-           Стандартные отчеты:
-           - Выберите тип отчета из выпадающего списка
-           - Нажмите "Показать отчет"
-           - Результаты отображаются в таблице
-           - Можно скачать отчет в формате CSV
-           
-           Пользовательские запросы:
-           - Задайте вопрос на русском языке
-           - Система автоматически создаст SQL-запрос
-           - Покажет объяснение запроса
-           - Выведет результаты в таблице
-        
-        3. ПРИМЕРЫ ВОПРОСОВ ДЛЯ АНАЛИЗА:
-           
-           Трафик:
-           - "Покажи мой трафик за последний месяц"
-           - "Сколько трафика было вчера?"
-           - "Дни с максимальным трафиком за неделю"
-           - "Сравни трафик за январь и февраль"
-           
-           Устройства:
-           - "Список всех моих устройств"
-           - "Когда установили последнее устройство?"
-           - "Сколько у меня активных устройств?"
-           - "Покажи устройства по типам"
-           
-           Договоры:
-           - "Информация о текущем договоре"
-           - "Когда заканчивается договор?"
-           - "Какая у меня абонентская плата?"
-           - "История всех договоров"
-        
-        4. ОГРАНИЧЕНИЯ СИСТЕМЫ:
-           
-           - Доступны только данные вашей компании
-           - Некоторые сложные запросы могут требовать уточнения
-           - При ошибках попробуйте переформулировать вопрос
-           - Система работает только с историческими данными
-           
-        5. ПОЛУЧЕНИЕ ПОМОЩИ:
-           
-           - Используйте помощника в левой панели
-           - Задавайте вопросы о работе системы
-           - Просматривайте примеры запросов
-           - Обращайтесь к технической поддержке при проблемах
-        """
-        documents.append(Document(page_content=lk_guide, metadata={"source": "guide"}))
-        
-        # Add detailed query examples
-        query_examples = """
-        ПОДРОБНЫЕ ПРИМЕРЫ ЗАПРОСОВ К СИСТЕМЕ:
-        
-        1. АНАЛИЗ ТРАФИКА:
-           
-           Простые запросы:
-           ✓ "Покажи мой трафик за вчера"
-           ✓ "Сколько трафика было в прошлом месяце?"
-           ✓ "Дни с максимальным трафиком за последний месяц"
-           ✓ "Сравни трафик по неделям"
-           
-           Сложные запросы:
-           ✓ "Покажи дни с превышением среднего трафика"
-           ✓ "Сравни использование трафика по месяцам"
-           ✓ "Найди периоды максимальной нагрузки"
-           ✓ "Проанализируй тренд потребления трафика"
-           ✓ "График потребления трафика за год"
-        
-        2. ИНФОРМАЦИЯ ОБ УСТРОЙСТВАХ:
-           
-           Базовые запросы:
-           ✓ "Какие у меня установлены устройства?"
-           ✓ "Когда установили последнее устройство?"
-           ✓ "Список устройств по типам"
-           ✓ "Устройства старше 2 лет"
-           
-           Аналитические запросы:
-           ✓ "Сколько устройств каждого типа?"
-           ✓ "Устройства, установленные в прошлом году"
-           ✓ "Активные устройства за последний месяц"
-           ✓ "Статистика по моделям устройств"
-        
-        3. ДОГОВОРЫ И ОПЛАТА:
-           
-           Информационные запросы:
-           ✓ "Информация о текущем договоре"
-           ✓ "Когда заканчивается договор?"
-           ✓ "Сумма оплаты по договору"
-           ✓ "История изменения абонентской платы"
-           
-           Аналитические запросы:
-           ✓ "Сравни стоимость разных тарифов"
-           ✓ "Покажи все мои договоры"
-           ✓ "Анализ расходов по месяцам"
-        
-        4. КОМПЛЕКСНЫЙ АНАЛИЗ:
-           
-           Сравнительные запросы:
-           ✓ "Сравни трафик до и после установки нового устройства"
-           ✓ "Покажи статистику по дням недели"
-           ✓ "Найди аномалии в трафике за последний месяц"
-           ✓ "Средний трафик по месяцам"
-           
-           Прогнозные запросы:
-           ✓ "Тренд потребления трафика"
-           ✓ "Прогноз расходов на следующий месяц"
-           ✓ "Анализ сезонности трафика"
-        """
-        documents.append(Document(page_content=query_examples, metadata={"source": "examples"}))
-        
-        # Add troubleshooting guide
-        troubleshooting = """
-        РУКОВОДСТВО ПО УСТРАНЕНИЮ ПРОБЛЕМ:
-        
-        1. ЧАСТЫЕ ПРОБЛЕМЫ И РЕШЕНИЯ:
-           
-           Система не отвечает:
-           - Проверьте подключение к интернету
-           - Обновите страницу браузера
-           - Очистите кэш браузера
-           - Попробуйте другой браузер
-           
-           Ошибки в запросах:
-           - Переформулируйте вопрос проще
-           - Используйте примеры из списка
-           - Проверьте правильность формулировки
-           - Обратитесь к помощнику
-           
-           Нет данных:
-           - Проверьте, что выбран правильный период
-           - Убедитесь, что данные есть в системе
-           - Попробуйте другой период времени
-           
-        2. КАК ПОЛУЧИТЬ ПОМОЩЬ:
-           
-           - Используйте помощника в левой панели
-           - Задайте вопрос о проблеме
-           - Опишите, что именно не работает
-           - Приложите скриншот ошибки
-           
-        3. КОНТАКТЫ ПОДДЕРЖКИ:
-           
-           Телефон: +7 (495) 363-91-41
-           Email: noc@steccom.ru
-           Время работы: 24/7
-        """
-        documents.append(Document(page_content=troubleshooting, metadata={"source": "troubleshooting"}))
-        
-        # Add technical details
-        technical_info = """
-        ТЕХНИЧЕСКАЯ ИНФОРМАЦИЯ О СИСТЕМЕ:
-        
-        1. СТРУКТУРА ДАННЫХ:
-           
-           Таблицы в базе данных:
-           - users: информация о пользователях (id, username, password, company, role)
-           - service_types: типы услуг (id, name, unit, description)
-           - tariffs: тарифы (id, service_type_id, name, price_per_unit, monthly_fee, traffic_limit)
-           - agreements: договоры (id, user_id, tariff_id, start_date, end_date, status)
-           - devices: подключенные устройства (imei, user_id, device_type, model, activated_at)
-           - sessions: сессии использования (id, imei, service_type_id, session_start, session_end, usage_amount)
-           - billing_records: записи о трафике и оплате (id, agreement_id, imei, service_type_id, billing_date, usage_amount, amount, paid)
-           
-        2. ТИПЫ УСЛУГ:
-           
-           - SBD: Short Burst Data (единица измерения: KB)
-           - VSAT_DATA: VSAT Data (единица измерения: MB) 
-           - VSAT_VOICE: VSAT Voice (единица измерения: minutes)
-           
-        3. ФОРМАТЫ ДАННЫХ:
-           
-           Даты: YYYY-MM-DD
-           Время: HH:MM:SS
-           Трафик: usage_amount в соответствующих единицах (KB/MB/minutes)
-           Деньги: в рублях с двумя знаками после запятой
-           
-        4. СВЯЗИ ТАБЛИЦ:
-           
-           billing_records -> agreements (agreement_id)
-           billing_records -> service_types (service_type_id)
-           agreements -> users (user_id)
-           agreements -> tariffs (tariff_id)
-           tariffs -> service_types (service_type_id)
-           devices -> users (user_id)
-           sessions -> devices (imei)
-           sessions -> service_types (service_type_id)
-           
-        5. ОГРАНИЧЕНИЯ СИСТЕМЫ:
-           
-           - Максимальный период запроса: 1 год
-           - Максимальное количество записей: 10,000
-           - Формат экспорта: только CSV
-           - Язык интерфейса: только русский
-           
-        6. БЕЗОПАСНОСТЬ:
-           
-           - Доступ только к данным своей компании
-           - Автоматическое логирование действий
-           - Шифрование передаваемых данных
-           - Регулярное резервное копирование
-        """
-        documents.append(Document(page_content=technical_info, metadata={"source": "technical"}))
+        # NOTE: Built-in guide/examples/troubleshooting/technical removed.
+        # They must now live in docs/kb/*.json and will be loaded via load_json_data.
         
         # Process original documentation if available
         if isinstance(data, list) and data:
@@ -610,30 +385,127 @@ SQL ЗАПРОС: {query}
 
     def get_response(self, question: str, role: str = 'user') -> str:
         """Get response for a question using RAG with role-based filtering and legacy marking"""
+        import time
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        start_time = time.time()
         default_prompt = (
             "Ты - эксперт по личному кабинету системы спутниковой связи СТЭККОМ. Твоя задача - помогать пользователям разобраться с работой системы.\n\n"
             "КОНТЕКСТ:\n{context}\n\nРОЛЬ ПОЛЬЗОВАТЕЛЯ: {role}\n\nПРАВИЛА ОТВЕТА:\n1. Отвечай ТОЛЬКО на русском языке\n2. Будь подробным, но кратким\n3. Если вопрос о том, как что-то сделать - дай пошаговую инструкцию\n"
             "4. Если вопрос о возможностях системы - перечисли актуальные функции текущего личного кабинета\n5. Если вопрос о примерах запросов - приведи конкретные примеры\n6. Если вопрос о проблемах - предложи решения\n7. Если не знаешь ответа - честно скажи об этом\n"
-            "8. Используй информацию из контекста\n9. Не выдумывай информацию\n10. Явно помечай материалы по наследной/старой системе как [LEGACY] и поясняй, что они не относятся к текущему ЛК\n\n"
+            "8. Используй информацию из контекста\n9. Не выдумывай информацию\n10. Материалы по наследной/старой системе помечай как [LEGACY]. Если пользователь явно спрашивает про старую систему/регламент/бланк заказа — отвечай на основе [LEGACY] материалов и прямо укажи, что ответ относится к старой системе.\n\n"
             "СТРУКТУРА ОТВЕТА:\n- Краткий ответ на вопрос\n- Пошаговые инструкции (если применимо)\n- Примеры (если применимо)\n- Дополнительные советы (если применимо)\n\nВОПРОС ПОЛЬЗОВАТЕЛЯ: {question}\n\nОТВЕТ:"
         )
         template = self._load_prompt("resources/prompts/assistant_prompt.txt", default_prompt)
         prompt = ChatPromptTemplate.from_template(template)
 
         try:
-            # Retrieve and filter documents by role
-            relevant_docs = self.vectorstore.as_retriever().get_relevant_documents(question)
+            # Detect legacy intent early to tune retrieval
+            legacy_intent = False
+            try:
+                ql = question.lower()
+                legacy_intent = any(k in ql for k in [
+                    'старой системе', 'старая система', 'legacy', 'регламент', 'бланк заказа',
+                    'старый регламент', 'устаревш'
+                ])
+            except Exception:
+                legacy_intent = False
+
+            # Retrieve and filter documents by role (increase k for legacy intent)
+            base_k = 12 if not legacy_intent else 20
+            retriever = self.vectorstore.as_retriever(search_kwargs={"k": base_k})
+            relevant_docs = retriever.get_relevant_documents(question)
+            # If legacy intent and no legacy docs surfaced, do a targeted second pass
+            if legacy_intent and not any(
+                ('legacy_billing' in (d.metadata.get('scope') or [])) if isinstance(d.metadata.get('scope'), list)
+                else (d.metadata.get('scope') == 'legacy_billing') for d in relevant_docs if isinstance(d.metadata, dict)
+            ):
+                probe_query = question + " legacy регламент бланк заказа common services"
+                try:
+                    extra = self.vectorstore.similarity_search(probe_query, k=10)
+                    # merge without duplicates
+                    seen_ids = set(id(doc) for doc in relevant_docs)
+                    for doc in extra:
+                        if id(doc) not in seen_ids:
+                            relevant_docs.append(doc)
+                            seen_ids.add(id(doc))
+                except Exception:
+                    pass
+
+            # Ensure inclusion of specific legacy common services reg if user asks about бланк заказа/регламент
+            if legacy_intent:
+                try:
+                    seen_ids = set(id(doc) for doc in relevant_docs)
+                    for doc in self.documents:
+                        meta = doc.metadata if isinstance(doc.metadata, dict) else {}
+                        kb_file = (meta.get('kb_file') or '').lower()
+                        title = (meta.get('title') or '').lower()
+                        if 'legacy_reglament_commonservices' in kb_file or 'общие услуги' in title or 'common services' in title:
+                            if id(doc) not in seen_ids:
+                                relevant_docs.append(doc)
+                                seen_ids.add(id(doc))
+                except Exception:
+                    pass
             relevant_docs = self._filter_docs_by_role_and_scope(relevant_docs, role)
+
+            # If пользователь явно спрашивает про "бланк заказа" — принудительно добавим релевантные куски
+            try:
+                if legacy_intent and ('бланк заказа' in ql):
+                    extra_snippets: List[Document] = []
+                    for doc in self.documents:
+                        meta = doc.metadata if isinstance(doc.metadata, dict) else {}
+                        kb_file = (meta.get('kb_file') or '').lower()
+                        if 'legacy_reglament_commonservices' in kb_file and 'бланк заказа' in doc.page_content.lower():
+                            extra_snippets.append(doc)
+                    if extra_snippets:
+                        # Препендим, чтобы они были в контексте первыми
+                        relevant_docs = extra_snippets + relevant_docs
+            except Exception:
+                pass
 
             # Format documents with legacy marking
             context = self._mark_legacy_in_context(relevant_docs)
 
+            if legacy_intent:
+                # Augment instructions inline
+                template = template + "\n\nДОПОЛНЕНИЕ: Пользователь спрашивает про старую/наследную систему. Используй [LEGACY] материалы как основной источник ответа и явно пометь применимость."
+                prompt = ChatPromptTemplate.from_template(template)
+
             chain = prompt | self.chat_model | StrOutputParser()
-            response = chain.invoke({
-                "context": context,
-                "question": question,
-                "role": role
-            })
+            
+            # Add timeout protection for LLM call
+            import signal
+            
+            def timeout_handler(signum, frame):
+                raise TimeoutError("RAG request timeout")
+            
+            # Set 30 second timeout
+            signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(30)
+            
+            try:
+                response = chain.invoke({
+                    "context": context,
+                    "question": question,
+                    "role": role
+                })
+                signal.alarm(0)  # Cancel timeout
+                
+                elapsed = time.time() - start_time
+                if elapsed > 10:
+                    logger.warning(f"Slow RAG request: {elapsed:.1f}s for question: {question[:50]}...")
+                
+            except TimeoutError:
+                signal.alarm(0)  # Cancel timeout
+                elapsed = time.time() - start_time
+                logger.error(f"RAG request timeout after {elapsed:.1f}s for question: {question[:50]}...")
+                return self._get_fallback_response(question, role)
+            except Exception as e:
+                signal.alarm(0)  # Cancel timeout
+                elapsed = time.time() - start_time
+                logger.error(f"RAG request failed after {elapsed:.1f}s: {e}")
+                return self._get_fallback_response(question, role)
             
             # Build citations from filtered documents
             citations: List[str] = []
@@ -659,7 +531,27 @@ SQL ЗАПРОС: {query}
                 response += "\n\n---\n**Источники:**\n" + "\n".join(citations)
             return response
         except Exception as e:
-            return f"Ошибка получения ответа: {e}"
+            logger.error(f"RAG system error: {e}")
+            return self._get_fallback_response(question, role)
+    
+    def _get_fallback_response(self, question: str, role: str) -> str:
+        """Fallback response when RAG system fails or times out"""
+        return f"""Извините, система временно недоступна. 
+
+**Краткий ответ:**
+Для получения помощи по личному кабинету СТЭККОМ обратитесь в техническую поддержку.
+
+**Контакты:**
+- Телефон: +7 (495) 363-91-41
+- Email: noc@steccom.ru
+- Время работы: 24/7
+
+**Основные функции ЛК:**
+- Стандартные отчеты по трафику и устройствам
+- Пользовательские SQL-запросы
+- Просмотр договоров и тарифов
+
+Попробуйте переформулировать вопрос или обратитесь к администратору."""
 
     def search_similar(self, query: str, k: int = 3) -> List[str]:
         """Search for similar documents"""

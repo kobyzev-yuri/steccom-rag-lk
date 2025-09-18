@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  mediawiki:
+    image: mediawiki:1.39
+    container_name: steccom-mediawiki
+    ports:
+      - "8080:80"
+    environment:
+      - MEDIAWIKI_DB_TYPE=sqlite
+      - MEDIAWIKI_DB_NAME=mediawiki
+      - MEDIAWIKI_SITE_NAME=СТЭККОМ Wiki
+      - MEDIAWIKI_SITE_LANG=ru
+      - MEDIAWIKI_ADMIN_USER=admin
+      - MEDIAWIKI_ADMIN_PASS=admin123
+      - MEDIAWIKI_ENABLE_UPLOADS=true
+    volumes:
+      - mediawiki_data:/var/www/html/images
+      - ./mediawiki/LocalSettings.php:/var/www/html/LocalSettings.php:ro
+    restart: unless-stopped
+
+  # Опционально: phpMyAdmin для управления БД
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: steccom-phpmyadmin
+    ports:
+      - "8081:80"
+    environment:
+      - PMA_HOST=mediawiki
+      - PMA_USER=root
+      - PMA_PASSWORD=root
+    depends_on:
+      - mediawiki
+    restart: unless-stopped
+
+volumes:
+  mediawiki_data:
