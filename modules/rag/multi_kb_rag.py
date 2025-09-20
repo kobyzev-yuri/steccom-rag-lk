@@ -45,9 +45,12 @@ class MultiKBRAG:
                                                     encode_kwargs={"normalize_embeddings": True})
             self._embedding_backend = {"provider": "huggingface", "model": embedding_model}
         else:
-            # Используем Ollama по умолчанию
-            self.embeddings = OllamaEmbeddings(model=os.getenv("OLLAMA_EMBED_MODEL", "all-minilm"))
-            self._embedding_backend = {"provider": "ollama", "model": os.getenv("OLLAMA_EMBED_MODEL", "all-minilm")}
+            # Используем HuggingFace для эмбеддингов (быстрее и эффективнее)
+            embedding_model = os.getenv("EMBEDDING_MODEL", "intfloat/multilingual-e5-base")
+            self.embeddings = HuggingFaceEmbeddings(model_name=embedding_model, 
+                                                    model_kwargs={"device": "cpu"},
+                                                    encode_kwargs={"normalize_embeddings": True})
+            self._embedding_backend = {"provider": "huggingface", "model": embedding_model}
         # Resolve chat backend configuration (constructor overrides env)
         env_use_proxy = os.getenv("USE_PROXYAPI", "false").lower() == "true"
         resolved_provider = (chat_provider or ("proxyapi" if env_use_proxy else "ollama")).lower()
@@ -523,3 +526,98 @@ class MultiKBRAG:
         """Clear all loaded knowledge bases"""
         self.vectorstores.clear()
         self.kb_metadata.clear()
+    
+    # API wrapper methods
+    def get_status(self) -> Dict:
+        """Get RAG system status for API"""
+        try:
+            loaded_kbs = list(self.vectorstores.keys())
+            available_kbs = self.get_available_kbs()
+            stats = self.get_kb_statistics()
+            
+            return {
+                "status": "ready" if loaded_kbs else "no_kbs_loaded",
+                "loaded_kbs": loaded_kbs,
+                "available_kbs": available_kbs,
+                "statistics": stats,
+                "embedding_backend": self._embedding_backend,
+                "chat_backend": self._chat_backend
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": str(e),
+                "loaded_kbs": [],
+                "available_kbs": []
+            }
+    
+    def search(self, query: str, kb_names: Optional[List[str]] = None, limit: int = 5) -> List[Dict]:
+        """Search in knowledge bases - API wrapper"""
+        try:
+            # Convert kb_names to kb_ids if provided
+            kb_ids = None
+            if kb_names:
+                kb_ids = []
+                for kb_name in kb_names:
+                    for kb_id, metadata in self.kb_metadata.items():
+                        if metadata.get('name') == kb_name:
+                            kb_ids.append(kb_id)
+                            break
+            
+            # Search across knowledge bases
+            docs = self.search_across_kbs(query, kb_ids, k=limit)
+            
+            # Convert to API format
+            results = []
+            for doc in docs:
+                results.append({
+                    "content": doc.page_content,
+                    "metadata": doc.metadata,
+                    "kb_name": doc.metadata.get('kb_name', 'Unknown'),
+                    "kb_category": doc.metadata.get('kb_category', 'Unknown')
+                })
+            
+            return results
+        except Exception as e:
+            return [{"error": str(e)}]
+    
+    def ask_question(self, question: str, kb_names: Optional[List[str]] = None) -> Dict:
+        """Ask a question using RAG - API wrapper"""
+        try:
+            # Convert kb_names to kb_ids if provided
+            kb_ids = None
+            if kb_names:
+                kb_ids = []
+                for kb_name in kb_names:
+                    for kb_id, metadata in self.kb_metadata.items():
+                        if metadata.get('name') == kb_name:
+                            kb_ids.append(kb_id)
+                            break
+            
+            # Get response with context
+            answer = self.get_response_with_context(question, kb_ids, context_limit=3)
+            
+            # Get sources
+            relevant_docs = self.search_across_kbs(question, kb_ids, k=3)
+            sources = []
+            kb_used = set()
+            
+            for doc in relevant_docs:
+                sources.append({
+                    "content": doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content,
+                    "kb_name": doc.metadata.get('kb_name', 'Unknown'),
+                    "kb_category": doc.metadata.get('kb_category', 'Unknown')
+                })
+                kb_used.add(doc.metadata.get('kb_name', 'Unknown'))
+            
+            return {
+                "answer": answer,
+                "sources": sources,
+                "kb_used": list(kb_used)
+            }
+        except Exception as e:
+            return {
+                "answer": f"Ошибка при обработке вопроса: {str(e)}",
+                "sources": [],
+                "kb_used": []
+            }
