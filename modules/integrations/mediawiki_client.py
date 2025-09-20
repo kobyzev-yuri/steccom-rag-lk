@@ -22,8 +22,8 @@ class MediaWikiClient:
             password: Пароль для аутентификации
         """
         self.wiki_url = wiki_url.rstrip('/')
-        if not self.wiki_url.endswith('/w/api.php'):
-            self.wiki_url += '/w/api.php'
+        if not self.wiki_url.endswith('/api.php'):
+            self.wiki_url += '/api.php'
         
         self.username = username
         self.password = password

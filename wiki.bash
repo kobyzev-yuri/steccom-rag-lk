@@ -112,7 +112,7 @@ publish() {
   curl -s -X POST "${API_URL}/wiki/publish" \
     -H "Authorization: Bearer ${TOKEN}" \
     -H "Content-Type: application/json" \
-    -d "{\"wiki_url\":\"http://localhost:${PORT}/w/api.php\",\"username\":\"${USER}\",\"password\":\"${PASS}\",\"kb_glob\":\"${GLOB}\"}" | jq . || true
+    -d "{\"wiki_url\":\"http://localhost:${PORT}/api.php\",\"username\":\"${USER}\",\"password\":\"${PASS}\",\"kb_glob\":\"${GLOB}\"}" | jq . || true
 }
 
 cmd="${1:-}"
@@ -243,7 +243,7 @@ publish() {
   curl -s -X POST "${API_URL}/wiki/publish" \
     -H "Authorization: Bearer ${TOKEN}" \
     -H "Content-Type: application/json" \
-    -d "{\"wiki_url\":\"http://localhost:${PORT}/w/api.php\",\"username\":\"${USER}\",\"password\":\"${PASS}\",\"kb_glob\":\"${GLOB}\"}" | jq . || true
+    -d "{\"wiki_url\":\"http://localhost:${PORT}/api.php\",\"username\":\"${USER}\",\"password\":\"${PASS}\",\"kb_glob\":\"${GLOB}\"}" | jq . || true
 }
 
 cmd="${1:-}"
