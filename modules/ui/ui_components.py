@@ -604,6 +604,65 @@ def render_staff_view():
             st.error(f"Не удалось прочитать логи: {e}")
 
         st.caption("Примечание: при обнаружении ошибок в логах я сначала сообщу вам, а уже затем предложу исправление.")
+
+        st.markdown("---")
+        st.subheader("Публикация в Wiki")
+        try:
+            from ..integrations.wiki_publisher import WikiPublisher
+            
+            # Wiki connection settings
+            wiki_url = st.text_input("URL MediaWiki API", value="http://localhost:8080/api.php", key="wiki_publish_url")
+            wiki_username = st.text_input("Имя пользователя Wiki", key="wiki_publish_username")
+            wiki_password = st.text_input("Пароль Wiki", type="password", key="wiki_publish_password")
+            
+            # KB file selection
+            import glob
+            kb_files = sorted(glob.glob("docs/kb/*.json"))
+            if kb_files:
+                selected_kb = st.selectbox("Выберите KB для публикации:", kb_files, key="wiki_publish_kb")
+                wiki_namespace = st.text_input("Namespace в Wiki", value="KB", key="wiki_publish_namespace")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("📤 Опубликовать в Wiki", key="wiki_publish_btn"):
+                        if wiki_url and wiki_username and wiki_password:
+                            with st.spinner("Публикация в Wiki..."):
+                                try:
+                                    publisher = WikiPublisher(wiki_url, wiki_username, wiki_password)
+                                    success, message = publisher.publish_kb_to_wiki(selected_kb, wiki_namespace)
+                                    if success:
+                                        st.success(message)
+                                    else:
+                                        st.error(message)
+                                except Exception as e:
+                                    st.error(f"Ошибка публикации: {e}")
+                        else:
+                            st.warning("Заполните все поля для подключения к Wiki")
+                
+                with col2:
+                    if st.button("📋 Список опубликованных", key="wiki_list_btn"):
+                        if wiki_url and wiki_username and wiki_password:
+                            with st.spinner("Получение списка..."):
+                                try:
+                                    publisher = WikiPublisher(wiki_url, wiki_username, wiki_password)
+                                    pages = publisher.list_published_pages(wiki_namespace)
+                                    if pages:
+                                        st.write("Опубликованные страницы:")
+                                        for page in pages:
+                                            st.write(f"• {page}")
+                                    else:
+                                        st.info("Нет опубликованных страниц")
+                                except Exception as e:
+                                    st.error(f"Ошибка получения списка: {e}")
+                        else:
+                            st.warning("Заполните все поля для подключения к Wiki")
+            else:
+                st.info("KB файлы в docs/kb/ не найдены")
+                
+        except ImportError as e:
+            st.error(f"Модуль WikiPublisher недоступен: {e}")
+        except Exception as e:
+            st.error(f"Ошибка публикации в Wiki: {e}")
         st.subheader("PDF Uploads → KB (Legacy)")
         try:
             import os

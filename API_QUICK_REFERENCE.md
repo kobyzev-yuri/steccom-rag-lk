@@ -1,4 +1,4 @@
-# СТЭККОМ API - Быстрая справка
+щддф# СТЭККОМ API - Быстрая справка
 
 ## 🚀 Запуск
 ```bash
@@ -90,5 +90,5 @@ curl http://localhost:8000/health
 - DEBUG‑сообщения в UI отключены.
 - Генерация тестовых VSAT_VOICE сессий вынесена в скрипт:
   ```bash
-  python /home/cnn/steccom/scripts/generate_vsat_voice_data.py
+  python /mnt/ai/cnn/steccom/scripts/generate_vsat_voice_data.py
   ```

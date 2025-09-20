@@ -34,9 +34,7 @@
         "text": "Основные таблицы: users, devices, sessions, billing_records, agreements, tariffs, service_types. Даты: YYYY‑MM‑DD; экспорт — CSV."
       }
     ]
-  }
-]
-[
+  },
   {
     "title": "Возможности интерфейса личного кабинета",
     "description": "Краткое описание доступных разделов и функций",
