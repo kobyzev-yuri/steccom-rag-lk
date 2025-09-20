@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  mediawiki:
+    image: mediawiki:1.39
+    container_name: steccom-mediawiki
+    ports:
+      - "8080:80"
+    environment:
+      - MEDIAWIKI_DB_TYPE=sqlite
+      - MEDIAWIKI_DB_NAME=mediawiki
+      - MEDIAWIKI_SITE_NAME=СТЭККОМ Wiki
+      - MEDIAWIKI_SITE_LANG=ru
+      - MEDIAWIKI_ADMIN_USER=admin
+      - MEDIAWIKI_ADMIN_PASS=Admin123456789
+      - MEDIAWIKI_ENABLE_UPLOADS=true
+    volumes:
+      # Постоянное хранение базы данных
+      - ./mediawiki_db_persistent:/var/www/html/data
+      # Постоянное хранение загруженных файлов
+      - ./mediawiki_data:/var/www/html/images
+      # Конфигурация MediaWiki
+      - ./mediawiki/LocalSettings.php:/var/www/html/LocalSettings.php:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/api.php?action=query&meta=siteinfo&format=json"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Опционально: phpMyAdmin для управления БД (если понадобится MySQL)
+  # phpmyadmin:
+  #   image: phpmyadmin/phpmyadmin
+  #   container_name: steccom-phpmyadmin
+  #   ports:
+  #     - "8081:80"
+  #   environment:
+  #     - PMA_HOST=mediawiki
+  #     - PMA_USER=root
+  #     - PMA_PASSWORD=root
+  #   depends_on:
+  #     - mediawiki
+  #   restart: unless-stopped
+
+volumes:
+  # Именованные тома (альтернатива bind mounts)
+  mediawiki_data:
+    driver: local
+  mediawiki_db:
+    driver: local
