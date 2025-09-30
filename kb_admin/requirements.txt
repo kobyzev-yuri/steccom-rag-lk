@@ -1,0 +1,51 @@
+# KB Admin Dependencies
+# Основные зависимости для системы управления базами знаний
+
+# Streamlit для UI
+streamlit==1.28.1
+streamlit-option-menu==0.3.6
+
+# LangChain для RAG
+langchain==0.1.0
+langchain-community==0.0.10
+langchain-openai==0.0.2
+langchain-huggingface==0.0.1
+
+# Векторные хранилища
+faiss-cpu==1.7.4
+chromadb==0.4.15
+
+# Обработка документов
+pypdf2==3.0.1
+python-docx==0.8.11
+python-multipart==0.0.6
+beautifulsoup4==4.12.2
+
+# База данных
+sqlite3  # Built-in
+pandas==2.1.4
+
+# HTTP клиенты
+httpx==0.25.2
+requests==2.31.0
+
+# Визуализация
+plotly==5.17.0
+matplotlib==3.8.2
+
+# Тестирование
+pytest==7.4.3
+pytest-asyncio==0.21.1
+
+# Утилиты
+python-dotenv==1.0.0
+pyyaml==6.0.1
+tqdm==4.66.1
+
+# Логирование
+loguru==0.7.2
+
+# Разработка
+black==23.11.0
+isort==5.12.0
+flake8==6.1.0

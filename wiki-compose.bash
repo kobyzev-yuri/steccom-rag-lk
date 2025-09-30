@@ -8,16 +8,57 @@ PORT="8080"
 ROOT="$(pwd)"
 API_URL="http://localhost:8000"                       # FastAPI (для publish)
 
+# Detect compose binary (docker compose vs docker-compose), else fallback to bare docker
+COMPOSE=""
+MODE=""
+detect_compose() {
+  if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+    COMPOSE="docker compose"
+    MODE="compose"
+  elif command -v docker-compose >/dev/null 2>&1; then
+    # Validate docker-compose actually runs (old Debian package may be broken)
+    if docker-compose version >/dev/null 2>&1; then
+      COMPOSE="docker-compose"
+      MODE="compose"
+    else
+      MODE="bare"
+    fi
+  else
+    MODE="bare"
+  fi
+}
+
+ensure_requirements() {
+  detect_compose
+  if [[ "${MODE}" == "compose" ]]; then
+    if [[ ! -f "${COMPOSE_FILE}" ]]; then
+      echo "docker-compose.yml не найден: ${COMPOSE_FILE}"
+      exit 1
+    fi
+  fi
+}
+
+# Ensure volumes exist and ownership is correct for www-data (uid:33,gid:33)
+ensure_volumes() {
+  mkdir -p ./mediawiki_db_persistent ./mediawiki_data ./mediawiki
+  # Попробуем выставить права, если доступно
+  if chown -R 33:33 ./mediawiki_db_persistent ./mediawiki_data 2>/dev/null; then
+    :
+  else
+    echo "⚠️ Не удалось chown 33:33 для mediawiki_* (возможно, нет прав). Продолжаю..."
+  fi
+}
+
 usage() {
   cat <<EOF
 Usage: $0 <command> [options]
 
 Commands:
-  start             Запустить MediaWiki через docker-compose
+  start             Запустить MediaWiki (compose или bare docker)
   stop              Остановить MediaWiki
   restart           Перезапустить MediaWiki
   status            Показать статус и проверить CSS/картинки
-  purge             Очистить кэш Wiki и purge главной
+  purge             Очистить кэша Wiki и purge главной
   publish           Опубликовать KB в MediaWiki через FastAPI (нужен $TOKEN)
                     Options: --user admin --pass Admin123456789 --glob "docs/kb/*.json"
   logs              Показать логи MediaWiki
@@ -32,28 +73,83 @@ Examples:
 EOF
 }
 
-ensure_requirements() {
-  command -v docker-compose >/dev/null 2>&1 || { echo "docker-compose not found"; exit 1; }
-  if [[ ! -f "${COMPOSE_FILE}" ]]; then
-    echo "docker-compose.yml не найден: ${COMPOSE_FILE}"
-    exit 1
-  fi
+# ---------------- Compose mode commands ----------------
+start_compose() {
+  echo "🚀 Запуск MediaWiki через ${COMPOSE}..."
+  ${COMPOSE} -f "${COMPOSE_FILE}" up -d
 }
 
+stop_compose() {
+  echo "🛑 Остановка MediaWiki..."
+  ${COMPOSE} -f "${COMPOSE_FILE}" down
+}
+
+status_compose() {
+  echo "🐳 Статус контейнеров (compose):"
+  ${COMPOSE} -f "${COMPOSE_FILE}" ps || true
+}
+
+logs_compose() {
+  echo "📋 Логи MediaWiki:"
+  ${COMPOSE} -f "${COMPOSE_FILE}" logs -f mediawiki
+}
+
+purge_compose() {
+  ${COMPOSE} -f "${COMPOSE_FILE}" exec -T mediawiki rm -rf /var/www/html/cache/* >/dev/null 2>&1 || true
+}
+
+# ---------------- Bare docker fallback ----------------
+start_bare() {
+  echo "🚀 Запуск MediaWiki через bare docker..."
+  docker rm -f "${CONTAINER}" >/dev/null 2>&1 || true
+  docker run -d --name "${CONTAINER}" \
+    -p "${PORT}:80" \
+    -e MEDIAWIKI_DB_TYPE=sqlite \
+    -e MEDIAWIKI_DB_NAME=mediawiki \
+    -e MEDIAWIKI_SITE_NAME="СТЭККОМ Wiki" \
+    -e MEDIAWIKI_SITE_LANG=ru \
+    -e MEDIAWIKI_ADMIN_USER=admin \
+    -e MEDIAWIKI_ADMIN_PASS=Admin123456789 \
+    -e MEDIAWIKI_ENABLE_UPLOADS=true \
+    -v "${ROOT}/mediawiki_db_persistent:/var/www/html/data" \
+    -v "${ROOT}/mediawiki_data:/var/www/html/images" \
+    -v "${ROOT}/mediawiki/LocalSettings.php:/var/www/html/LocalSettings.php:ro" \
+    --restart unless-stopped \
+    mediawiki:1.39
+}
+
+stop_bare() {
+  echo "🛑 Остановка MediaWiki (bare)..."
+  docker stop "${CONTAINER}" >/dev/null 2>&1 || true
+  docker rm "${CONTAINER}" >/dev/null 2>&1 || true
+}
+
+status_bare() {
+  echo "🐳 Статус контейнера (bare):"
+  docker ps --filter "name=${CONTAINER}" --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}' || true
+}
+
+logs_bare() {
+  echo "📋 Логи MediaWiki (bare):"
+  docker logs -f "${CONTAINER}"
+}
+
+purge_bare() {
+  docker exec -T "${CONTAINER}" rm -rf /var/www/html/cache/* >/dev/null 2>&1 || true
+}
+
+# ---------------- Common flows ----------------
 start() {
   ensure_requirements
-  echo "🚀 Запуск MediaWiki через docker-compose..."
-  docker-compose up -d
+  ensure_volumes
+  if [[ "${MODE}" == "compose" ]]; then
+    start_compose
+  else
+    start_bare
+  fi
   
   echo "⏳ Жду поднятие сервера..."
   sleep 10
-  
-  # Проверяем здоровье контейнера
-  if docker-compose ps | grep -q "healthy"; then
-    echo "✅ MediaWiki запущен и здоров"
-  else
-    echo "⚠️  MediaWiki запущен, но проверка здоровья не прошла"
-  fi
   
   # Purge главной
   curl -s "http://localhost:${PORT}/index.php?title=Заглавная_страница&action=purge" >/dev/null || true
@@ -61,8 +157,12 @@ start() {
 }
 
 stop() {
-  echo "🛑 Остановка MediaWiki..."
-  docker-compose down
+  ensure_requirements
+  if [[ "${MODE}" == "compose" ]]; then
+    stop_compose
+  else
+    stop_bare
+  fi
   echo "✅ MediaWiki остановлен"
 }
 
@@ -72,15 +172,23 @@ restart() {
 }
 
 purge() {
-  # Очистка кэша и purge главной
-  docker-compose exec mediawiki rm -rf /var/www/html/cache/* >/dev/null 2>&1 || true
+  ensure_requirements
+  if [[ "${MODE}" == "compose" ]]; then
+    purge_compose
+  else
+    purge_bare
+  fi
   curl -s "http://localhost:${PORT}/index.php?title=Заглавная_страница&action=purge" >/dev/null || true
   echo "✅ Кэш очищен, главная обновлена"
 }
 
 status() {
-  echo "🐳 Статус контейнеров:"
-  docker-compose ps
+  ensure_requirements
+  if [[ "${MODE}" == "compose" ]]; then
+    status_compose
+  else
+    status_bare
+  fi
   echo
   echo "🔎 Проверка CSS (ожидается Content-Type: text/css)"
   curl -I "http://localhost:${PORT}/load.php?lang=ru&modules=skins.vector.styles.legacy&only=styles&skin=vector" | sed -n '1,10p' || true
@@ -93,8 +201,12 @@ status() {
 }
 
 logs() {
-  echo "📋 Логи MediaWiki:"
-  docker-compose logs -f mediawiki
+  ensure_requirements
+  if [[ "${MODE}" == "compose" ]]; then
+    logs_compose
+  else
+    logs_bare
+  fi
 }
 
 backup() {
@@ -110,6 +222,7 @@ backup() {
 }
 
 restore() {
+  ensure_requirements
   if [[ $# -eq 0 ]]; then
     echo "Использование: $0 restore <путь_к_бэкапу>"
     echo "Доступные бэкапы:"
@@ -126,7 +239,11 @@ restore() {
   echo "🔄 Восстановление из бэкапа: $BACKUP_PATH"
   
   # Останавливаем MediaWiki
-  docker-compose down
+  if [[ "${MODE}" == "compose" ]]; then
+    stop_compose
+  else
+    stop_bare
+  fi
   
   # Восстанавливаем данные
   rm -rf mediawiki_db_persistent mediawiki_data
@@ -134,7 +251,11 @@ restore() {
   cp -r "$BACKUP_PATH/mediawiki_data" ./
   
   # Запускаем MediaWiki
-  docker-compose up -d
+  if [[ "${MODE}" == "compose" ]]; then
+    start_compose
+  else
+    start_bare
+  fi
   
   echo "✅ Восстановление завершено"
 }

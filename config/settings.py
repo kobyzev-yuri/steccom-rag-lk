@@ -20,10 +20,25 @@ DATABASE_PATH = BASE_DIR / "satellite_billing.db"
 OLLAMA_BASE_URL = "http://localhost:11434/v1"
 OLLAMA_API_KEY = "ollama"
 
-# Model configurations
-EMBEDDING_MODEL = "all-minilm"
-CHAT_MODEL = "qwen3:8b"
-SQL_MODEL = "qwen2.5:3b"
+# Model configurations - общие настройки для всех агентов
+MODELS = {
+    # Текстовые модели
+    "chat": "qwen3:8b",
+    "sql": "qwen3:8b", 
+    "embedding": "all-minilm",
+    
+    # Vision модели
+    "vision": "llava-phi3:latest",
+    
+    # Специализированные модели
+    "document_analysis": "qwen3:8b",
+    "text_extraction": "qwen3:8b",
+    "content_categorization": "qwen3:8b"
+}
+
+# Ollama settings
+OLLAMA_BASE_URL = "http://localhost:11434"
+OLLAMA_API_KEY = "ollama"
 
 # RAG settings
 CHUNK_SIZE = 1000

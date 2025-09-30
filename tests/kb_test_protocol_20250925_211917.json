@@ -1,0 +1,236 @@
+{
+  "protocol_info": {
+    "created_at": "2025-09-25T21:19:21.296238",
+    "total_tests": 3,
+    "test_environment": {
+      "python_version": "3.x",
+      "test_framework": "pytest",
+      "rag_system": "MultiKBRAG",
+      "knowledge_bases": [
+        "legacy_reglament_sbd.json"
+      ],
+      "test_date": "2025-09-25T21:19:17.302150",
+      "test_location": "/mnt/ai/cnn/steccom/tests/"
+    }
+  },
+  "test_entries": [
+    {
+      "test_id": "test_001_211921",
+      "question": {
+        "question_id": "sbd_001",
+        "question_text": "Какие ограничения по размеру сообщений действуют для абонентских терминалов в услуге SBD?",
+        "expected_keywords": [
+          "340/1960 байт",
+          "270/1890 байт",
+          "зависимости от типа терминала",
+          "абонентский терминал"
+        ],
+        "category": "technical_limits",
+        "kb_source": "legacy_reglament_sbd.json",
+        "difficulty_level": "medium",
+        "expected_answer_type": "factual"
+      },
+      "model_response": {
+        "model_name": "gpt-4o",
+        "provider": "proxyapi",
+        "response_text": "Исходящие электронные сообщения с абонентского терминала не должны превышать 340/1960 байт в зависимости от типа используемого абонентского терминала. Входящие сообщения на абонентский терминал – не более 270/1890 байт в зависимости от типа используемого абонентского терминала.",
+        "response_time": 3.9937424659729004,
+        "sources_found": 0,
+        "sources_details": [
+          {
+            "source": "legacy_reglament_sbd.json",
+            "relevance": 0.8
+          }
+        ],
+        "timestamp": "2025-09-25T21:19:21",
+        "input_tokens": 22,
+        "output_tokens": 69,
+        "total_tokens": 91,
+        "tokens_per_second": 17.28,
+        "cost_per_token": 8e-06,
+        "estimated_cost": 0.000745
+      },
+      "relevance_assessment": {
+        "accuracy_score": 0.75,
+        "completeness_score": 0.825,
+        "relevance_score": 0.8,
+        "keywords_found": [
+          "340/1960 байт",
+          "270/1890 байт",
+          "абонентский терминал"
+        ],
+        "keywords_missing": [
+          "зависимости от типа терминала"
+        ],
+        "overall_quality": "good",
+        "human_notes": "Тестирование после пересоздания индексов",
+        "efficiency_score": 0.1982,
+        "cost_effectiveness": 1062.6398
+      },
+      "test_timestamp": "2025-09-25T21:19:21.296044",
+      "test_environment": {
+        "python_version": "3.x",
+        "test_framework": "pytest",
+        "rag_system": "MultiKBRAG",
+        "knowledge_bases": [
+          "legacy_reglament_sbd.json"
+        ],
+        "test_date": "2025-09-25T21:19:17.302150",
+        "test_location": "/mnt/ai/cnn/steccom/tests/"
+      }
+    },
+    {
+      "test_id": "test_002_211921",
+      "question": {
+        "question_id": "sbd_002",
+        "question_text": "Какие правила действуют при деактивации абонентского терминала в течение месяца?",
+        "expected_keywords": [
+          "не чаще чем 1 раз в месяц",
+          "не в один и тот же день",
+          "одноразовая плата",
+          "начиная со второй деактивации",
+          "день деактивации - неактивный"
+        ],
+        "category": "deactivation_rules",
+        "kb_source": "legacy_reglament_sbd.json",
+        "difficulty_level": "hard",
+        "expected_answer_type": "procedural"
+      },
+      "model_response": {
+        "model_name": "gpt-4o",
+        "provider": "proxyapi",
+        "response_text": "Не найдено релевантной информации в базах знаний.",
+        "response_time": 9.5367431640625e-06,
+        "sources_found": 0,
+        "sources_details": [
+          {
+            "source": "legacy_reglament_sbd.json",
+            "relevance": 0.8
+          }
+        ],
+        "timestamp": "2025-09-25T21:19:21",
+        "input_tokens": 20,
+        "output_tokens": 12,
+        "total_tokens": 32,
+        "tokens_per_second": 1258291.2,
+        "cost_per_token": 5e-06,
+        "estimated_cost": 0.00017
+      },
+      "relevance_assessment": {
+        "accuracy_score": 0.0,
+        "completeness_score": 0.0735,
+        "relevance_score": 0.8,
+        "keywords_found": [],
+        "keywords_missing": [
+          "не чаще чем 1 раз в месяц",
+          "не в один и тот же день",
+          "одноразовая плата",
+          "начиная со второй деактивации",
+          "день деактивации - неактивный"
+        ],
+        "overall_quality": "fair",
+        "human_notes": "Тестирование после пересоздания индексов",
+        "efficiency_score": 30531.0379,
+        "cost_effectiveness": 1712.7451
+      },
+      "test_timestamp": "2025-09-25T21:19:21.296137",
+      "test_environment": {
+        "python_version": "3.x",
+        "test_framework": "pytest",
+        "rag_system": "MultiKBRAG",
+        "knowledge_bases": [
+          "legacy_reglament_sbd.json"
+        ],
+        "test_date": "2025-09-25T21:19:17.302150",
+        "test_location": "/mnt/ai/cnn/steccom/tests/"
+      }
+    },
+    {
+      "test_id": "test_003_211921",
+      "question": {
+        "question_id": "sbd_003",
+        "question_text": "Снимается ли плата за день, если услуга деактивирована?",
+        "expected_keywords": [
+          "другая абонентская плата",
+          "пропорционально доле неактивных дней",
+          "финансовый период",
+          "день деактивации - неактивный",
+          "время деактивированной услуги"
+        ],
+        "category": "billing_rules",
+        "kb_source": "legacy_reglament_sbd.json",
+        "difficulty_level": "hard",
+        "expected_answer_type": "factual"
+      },
+      "model_response": {
+        "model_name": "gpt-4o",
+        "provider": "proxyapi",
+        "response_text": "Не найдено релевантной информации в базах знаний.",
+        "response_time": 5.4836273193359375e-06,
+        "sources_found": 0,
+        "sources_details": [
+          {
+            "source": "legacy_reglament_sbd.json",
+            "relevance": 0.8
+          }
+        ],
+        "timestamp": "2025-09-25T21:19:21",
+        "input_tokens": 13,
+        "output_tokens": 12,
+        "total_tokens": 25,
+        "tokens_per_second": 2188332.52,
+        "cost_per_token": 6e-06,
+        "estimated_cost": 0.000152
+      },
+      "relevance_assessment": {
+        "accuracy_score": 0.0,
+        "completeness_score": 0.0735,
+        "relevance_score": 0.8,
+        "keywords_found": [],
+        "keywords_missing": [
+          "другая абонентская плата",
+          "пропорционально доле неактивных дней",
+          "финансовый период",
+          "день деактивации - неактивный",
+          "время деактивированной услуги"
+        ],
+        "overall_quality": "fair",
+        "human_notes": "Тестирование после пересоздания индексов",
+        "efficiency_score": 53097.4572,
+        "cost_effectiveness": 1915.5702
+      },
+      "test_timestamp": "2025-09-25T21:19:21.296207",
+      "test_environment": {
+        "python_version": "3.x",
+        "test_framework": "pytest",
+        "rag_system": "MultiKBRAG",
+        "knowledge_bases": [
+          "legacy_reglament_sbd.json"
+        ],
+        "test_date": "2025-09-25T21:19:17.302150",
+        "test_location": "/mnt/ai/cnn/steccom/tests/"
+      }
+    }
+  ],
+  "summary_statistics": {
+    "total_tests": 3,
+    "average_accuracy": 0.25,
+    "average_completeness": 0.324,
+    "average_relevance": 0.8,
+    "average_response_time": 1.33,
+    "average_tokens_per_second": 1148880.33,
+    "average_total_tokens": 49.0,
+    "total_estimated_cost": 0.001067,
+    "average_efficiency_score": 27876.2311,
+    "average_cost_effectiveness": 1563.6517,
+    "quality_distribution": {
+      "good": 1,
+      "fair": 2
+    },
+    "category_distribution": {
+      "technical_limits": 1,
+      "deactivation_rules": 1,
+      "billing_rules": 1
+    }
+  }
+}

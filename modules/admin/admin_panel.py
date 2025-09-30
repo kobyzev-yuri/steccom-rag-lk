@@ -13,14 +13,19 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 from modules.admin.knowledge_manager import KnowledgeBaseManager
 from modules.documents.pdf_processor import PDFProcessor
+from modules.documents.ocr_processor import OCRProcessor
+from modules.documents.vision_processor import VisionProcessor
 from modules.rag.multi_kb_rag import MultiKBRAG
 from modules.admin.simple_kb_assistant import SimpleKBAssistant
 from modules.admin.kb_workflow import KBWorkflow
+from modules.ui.agent_stats_panel import AgentStatsPanel
 
 class AdminPanel:
     def __init__(self):
         self.kb_manager = KnowledgeBaseManager()
         self.pdf_processor = PDFProcessor()
+        self.ocr_processor = OCRProcessor()
+        self.vision_processor = VisionProcessor()
         # Persist RAG system across reruns using session_state
         if 'admin_rag_system' not in st.session_state:
             st.session_state.admin_rag_system = MultiKBRAG()
@@ -28,10 +33,12 @@ class AdminPanel:
         try:
             self.kb_assistant = SimpleKBAssistant(self.kb_manager, self.pdf_processor)
             self.kb_workflow = KBWorkflow()
+            self.agent_stats_panel = AgentStatsPanel()
         except Exception as e:
             st.error(f"Ошибка инициализации ассистента: {e}")
             self.kb_assistant = None
             self.kb_workflow = None
+            self.agent_stats_panel = None
     
     def render_main_panel(self):
         """Render main admin panel"""
@@ -238,9 +245,9 @@ class AdminPanel:
         st.subheader("📤 Загрузить PDF документ")
         
         uploaded_file = st.file_uploader(
-            "Выберите PDF файл",
-            type=['pdf'],
-            help="Поддерживаются только PDF файлы"
+            "Выберите документ для загрузки",
+            type=['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp'],
+            help="Поддерживаются PDF файлы и изображения (PNG, JPG, JPEG, TIFF, BMP)"
         )
         
         if uploaded_file:
@@ -248,14 +255,92 @@ class AdminPanel:
             st.write(f"**Файл:** {uploaded_file.name}")
             st.write(f"**Размер:** {uploaded_file.size / 1024:.1f} KB")
             
+            # Выбор метода обработки для изображений
+            file_extension = uploaded_file.name.lower().split('.')[-1]
+            processing_method = "auto"
+            
+            if file_extension in ['png', 'jpg', 'jpeg', 'tiff', 'bmp', 'gif']:
+                st.subheader("🔍 Выберите метод обработки изображения:")
+                processing_method = st.radio(
+                    "Метод обработки:",
+                    ["auto", "ocr", "vision"],
+                    format_func=lambda x: {
+                        "auto": "🤖 Автоматический (OCR + Vision)",
+                        "ocr": "🔍 Только OCR (Tesseract)",
+                        "vision": "👁️ Только Vision (LLaVA-Phi3)"
+                    }[x],
+                    horizontal=True
+                )
+            
             # Process file
             if st.button("Обработать документ"):
                 with st.spinner("Обработка документа..."):
-                    result = self.pdf_processor.process_pdf(
-                        uploaded_file, 
-                        selected_kb_id, 
-                        uploaded_file.name
-                    )
+                    # Определяем тип файла и выбираем процессор
+                    file_extension = uploaded_file.name.lower().split('.')[-1]
+                    
+                    if file_extension == 'pdf':
+                        # Для PDF пробуем обычную обработку, затем OCR
+                        result = self.pdf_processor.process_pdf(
+                            uploaded_file, 
+                            selected_kb_id, 
+                            uploaded_file.name
+                        )
+                        
+                        # Если текста мало, пробуем OCR
+                        if result['success'] and len(result.get('text_content', '').strip()) < 100:
+                            st.info("Текста мало, пробуем OCR...")
+                            ocr_result = self.ocr_processor.process_uploaded_file(
+                                uploaded_file,
+                                selected_kb_id,
+                                uploaded_file.name
+                            )
+                            if ocr_result['success'] and len(ocr_result.get('text_content', '').strip()) > len(result.get('text_content', '').strip()):
+                                result = ocr_result
+                                result['extraction_method'] = 'pdf_then_ocr'
+                    else:
+                        # Для изображений выбираем метод обработки
+                        if processing_method == "vision":
+                            # Только Vision
+                            result = self.vision_processor.process_document_with_vision(
+                                uploaded_file.name
+                            )
+                            if result['success']:
+                                result['title'] = uploaded_file.name
+                                result['file_path'] = str(self.ocr_processor.upload_dir / f"{hashlib.md5(uploaded_file.getvalue()).hexdigest()}{Path(uploaded_file.name).suffix}")
+                                result['file_size'] = uploaded_file.size
+                                result['content_type'] = f'image/{file_extension}'
+                        elif processing_method == "ocr":
+                            # Только OCR
+                            result = self.ocr_processor.process_uploaded_file(
+                                uploaded_file,
+                                selected_kb_id,
+                                uploaded_file.name
+                            )
+                        else:
+                            # Автоматический режим: пробуем оба метода
+                            ocr_result = self.ocr_processor.process_uploaded_file(
+                                uploaded_file,
+                                selected_kb_id,
+                                uploaded_file.name
+                            )
+                            
+                            vision_result = self.vision_processor.process_document_with_vision(
+                                uploaded_file.name
+                            )
+                            
+                            # Выбираем лучший результат
+                            if (vision_result['success'] and 
+                                len(vision_result.get('text_content', '')) > len(ocr_result.get('text_content', ''))):
+                                result = vision_result
+                                result['title'] = uploaded_file.name
+                                result['file_path'] = str(self.ocr_processor.upload_dir / f"{hashlib.md5(uploaded_file.getvalue()).hexdigest()}{Path(uploaded_file.name).suffix}")
+                                result['file_size'] = uploaded_file.size
+                                result['content_type'] = f'image/{file_extension}'
+                                result['extraction_method'] = 'auto_vision'
+                            else:
+                                result = ocr_result
+                                if vision_result['success']:
+                                    result['extraction_method'] = 'auto_ocr'
                     
                     if result['success']:
                         # Add to database
@@ -272,6 +357,22 @@ class AdminPanel:
                         self.kb_manager.update_document_status(doc_id, True, 'completed')
                         
                         st.success(f"Документ успешно обработан! ID: {doc_id}")
+                        
+                        # Show extraction method
+                        extraction_method = result.get('extraction_method', 'unknown')
+                        method_emoji = {
+                            'pypdf2': '📄',
+                            'pymupdf': '📄',
+                            'ocr_pdf': '🔍',
+                            'ocr_image': '🖼️',
+                            'pdf_then_ocr': '📄→🔍',
+                            'llava_vision': '👁️',
+                            'auto_vision': '🤖→👁️',
+                            'auto_ocr': '🤖→🔍',
+                            'json-extract': '📋'
+                        }.get(extraction_method, '❓')
+                        
+                        st.info(f"{method_emoji} Метод извлечения: {extraction_method}")
                         
                         # Show extracted text preview
                         with st.expander("Предварительный просмотр текста"):
@@ -625,6 +726,11 @@ class AdminPanel:
             conn.close()
         except Exception as e:
             st.error(f"Не удалось загрузить статистику токенов: {e}")
+        
+        # Статистика агентов
+        if self.agent_stats_panel:
+            st.markdown("---")
+            self.agent_stats_panel.render_agent_stats()
 
         st.subheader("📁 Файловая система")
         

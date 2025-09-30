@@ -19,6 +19,8 @@ try:
 except ImportError:
     RAG_HELPER_AVAILABLE = False
     print("⚠️ RAGHelper недоступен: langchain_huggingface не установлен")
+# Force-disable RAGHelper to avoid startup errors; use MultiKBRAG only
+RAG_HELPER_AVAILABLE = False
 import os
 import sys
 import plotly.express as px
@@ -77,6 +79,7 @@ def initialize_session_state():
     
     # RAG system state
     st.session_state.setdefault('rag_initialized', False)
+    st.session_state.setdefault('rag_initializing', False)
     st.session_state.setdefault('rag_helper', None)
     st.session_state.setdefault('multi_rag', None)
     st.session_state.setdefault('kb_loaded_count', 0)
@@ -87,23 +90,19 @@ def initialize_rag_system():
     """Initialize RAG system safely"""
     print(f"🔍 DEBUG: initialize_rag_system вызвана, rag_initialized = {st.session_state.rag_initialized}")
     
+    # Reentrancy guard for Streamlit reruns
+    if st.session_state.get('rag_initializing'):
+        print("🔍 DEBUG: Инициализация уже идет (rag_initializing=True), пропускаем повторный вызов")
+        return
+
     if not st.session_state.rag_initialized:
         try:
             print("🔍 DEBUG: Начинаем инициализацию RAG системы...")
             print(f"🔍 DEBUG: RAG_HELPER_AVAILABLE = {RAG_HELPER_AVAILABLE}")
+            st.session_state.rag_initializing = True
+            init_ok = False
             
-            # Initialize RAG helper only if available
-            if RAG_HELPER_AVAILABLE:
-                print("🔍 DEBUG: RAGHelper доступен, инициализируем...")
-                st.session_state.rag_helper = RAGHelper()
-                st.session_state.rag_initialized = True
-                print("✅ RAGHelper инициализирован")
-            else:
-                st.session_state.rag_helper = None
-                st.session_state.rag_initialized = False
-                print("⚠️ RAGHelper недоступен")
-            
-            # Try to initialize multi-KB RAG if available
+            # Initialize multi-KB RAG first (stable path)
             try:
                 print("🔍 DEBUG: Пытаемся импортировать MultiKBRAG...")
                 print("🔍 DEBUG: Путь к модулю: modules.rag.multi_kb_rag")
@@ -120,12 +119,33 @@ def initialize_rag_system():
                 print("🔍 DEBUG: MultiKBRAG импортирован успешно, создаем экземпляр...")
                 st.session_state.multi_rag = MultiKBRAG()
                 
-                # Load available knowledge bases
-                print("🔍 DEBUG: Загружаем базы знаний...")
+                # Set default RAG model if not set
+                if 'rag_assistant_model' not in st.session_state:
+                    st.session_state.rag_assistant_model = 'qwen2.5:1.5b'
+                
+                # Apply the selected RAG model
+                try:
+                    st.session_state.multi_rag.set_chat_backend("ollama", st.session_state.rag_assistant_model)
+                    print(f"🔍 DEBUG: RAG модель установлена: {st.session_state.rag_assistant_model}")
+                except Exception as e:
+                    print(f"⚠️ DEBUG: Не удалось установить RAG модель: {e}")
+                
+                # Load active knowledge bases into memory
+                print("🔍 DEBUG: Загружаем активные базы знаний...")
+                try:
+                    loaded_count = st.session_state.multi_rag.load_all_active_kbs()
+                    print(f"✅ Загружено активных БЗ: {loaded_count}")
+                except Exception as e:
+                    print(f"❌ DEBUG: Ошибка при загрузке активных БЗ: {e}")
+                
+                # Read available KBs after load
                 available_kbs = st.session_state.multi_rag.get_available_kbs()
                 st.session_state.kb_loaded_count = len(available_kbs)
                 st.session_state.loaded_kbs_info = available_kbs
+                init_ok = True
                 print(f"✅ Multi-KB RAG инициализирован: {len(available_kbs)} БЗ")
+                # Set RAG as initialized here to avoid RAGHelper path
+                st.session_state.rag_initialized = True
                 
             except ImportError as e:
                 print(f"❌ DEBUG: ImportError при импорте MultiKBRAG: {e}")
@@ -142,13 +162,15 @@ def initialize_rag_system():
                 st.session_state.loaded_kbs_info = []
                 print(f"⚠️ Multi-KB RAG недоступен: {e}")
                 
+            # Skip RAGHelper initialization for stability
+            st.session_state.rag_helper = None
         except Exception as e:
             print(f"❌ DEBUG: Общая ошибка инициализации RAG: {e}")
             print(f"🔍 DEBUG: Тип ошибки: {type(e)}")
-            st.session_state.rag_initialized = False
-            st.session_state.rag_helper = None
-            st.session_state.multi_rag = None
             print(f"❌ Ошибка инициализации RAG: {e}")
+        finally:
+            # Always clear initializing flag
+            st.session_state.rag_initializing = False
     else:
         print("🔍 DEBUG: RAG система уже инициализирована, пропускаем")
 
@@ -196,6 +218,11 @@ def main():
     """Main application function"""
     # Configure logging early
     _configure_logging()
+    try:
+        import importlib.metadata as im
+        print(f"🔧 versions: sentence-transformers={im.version('sentence-transformers')}, transformers={im.version('transformers')}, langchain-huggingface={im.version('langchain-huggingface')}")
+    except Exception as _ver_e:
+        print(f"🔧 version check failed: {_ver_e}")
     # Initialize database
     init_db()
     

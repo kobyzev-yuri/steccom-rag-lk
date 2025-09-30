@@ -81,9 +81,9 @@ class MultiKBRAG:
             )
             self._chat_backend = {'provider': 'openai', 'model': resolved_model, 'temperature': resolved_temperature}
         else:
-            resolved_model = chat_model or os.getenv("OLLAMA_CHAT_MODEL", "qwen3:8b")
-            self.chat_model = ChatOllama(model=resolved_model)
-            self._chat_backend = {'provider': 'ollama', 'model': resolved_model}
+            resolved_model = chat_model or os.getenv("OLLAMA_CHAT_MODEL", "qwen2.5:latest")
+            self.chat_model = ChatOllama(model=resolved_model, timeout=10, temperature=resolved_temperature)
+            self._chat_backend = {'provider': 'ollama', 'model': resolved_model, 'temperature': resolved_temperature}
         self.vectorstores = {}  # kb_id -> vectorstore
         self.kb_metadata = {}   # kb_id -> metadata
         self.kb_chunks = {}     # kb_id -> List[Document]
@@ -119,8 +119,8 @@ class MultiKBRAG:
             )
             self._chat_backend = {'provider': 'openai', 'model': model, 'temperature': temperature}
         else:
-            self.chat_model = ChatOllama(model=model or os.getenv("OLLAMA_CHAT_MODEL", "qwen3:8b"))
-            self._chat_backend = {'provider': 'ollama', 'model': model}
+            self.chat_model = ChatOllama(model=model or os.getenv("OLLAMA_CHAT_MODEL", "qwen3:8b"), temperature=temperature)
+            self._chat_backend = {'provider': 'ollama', 'model': model, 'temperature': temperature}
 
     def _ensure_usage_table(self) -> None:
         """Create llm_usage table if not exists."""
@@ -175,6 +175,32 @@ class MultiKBRAG:
     def load_knowledge_base(self, kb_id: int) -> bool:
         """Load specific knowledge base into memory"""
         try:
+            # Try to load existing vectorstore first
+            vectorstore_path = f"data/knowledge_bases/vectorstore_{kb_id}"
+            if Path(vectorstore_path).exists():
+                try:
+                    vectorstore = FAISS.load_local(vectorstore_path, self.embeddings, allow_dangerous_deserialization=True)
+                    # Get KB info from database
+                    conn = sqlite3.connect(self.db_path)
+                    c = conn.cursor()
+                    c.execute("SELECT * FROM knowledge_bases WHERE id = ? AND is_active = 1", (kb_id,))
+                    kb_info = c.fetchone()
+                    conn.close()
+                    
+                    if kb_info:
+                        self.vectorstores[kb_id] = vectorstore
+                        self.kb_metadata[kb_id] = {
+                            'name': kb_info[1],
+                            'description': kb_info[2],
+                            'category': kb_info[3],
+                            'doc_count': 0,  # Will be updated when we load documents
+                            'chunk_count': 0
+                        }
+                        print(f"✅ Загружен сохраненный векторный индекс для KB {kb_id}")
+                        return True
+                except Exception as e:
+                    print(f"⚠️ Ошибка загрузки векторного индекса для KB {kb_id}: {e}")
+            
             # Get KB info from database
             conn = sqlite3.connect(self.db_path)
             c = conn.cursor()
@@ -207,26 +233,74 @@ class MultiKBRAG:
                 if doc_path and Path(doc_path).exists():
                     content = ""
                     extraction_error = None
-                    # First attempt: PyPDF2
-                    try:
-                        import PyPDF2
-                        with open(doc_path, 'rb') as file:
-                            pdf_reader = PyPDF2.PdfReader(file)
-                            for page in pdf_reader.pages:
-                                extracted = page.extract_text() or ""
-                                content += extracted + "\n"
-                    except Exception as e:
-                        extraction_error = str(e)
-
-                    # Fallback: PyMuPDF (fitz) if content is still too small
-                    if len(content.strip()) < 50:
+                    suffix = Path(doc_path).suffix.lower()
+                    if suffix == ".json":
+                        # JSON KB: собрать текст из полей title/content
                         try:
-                            import fitz  # PyMuPDF
-                            with fitz.open(doc_path) as pdf_doc:
-                                content = "\n".join([page.get_text() or "" for page in pdf_doc])
+                            import json as _json
+                            with open(doc_path, 'r', encoding='utf-8') as f:
+                                data = _json.load(f)
+                            parts = []
+                            # поддержка формата: список объектов с полями title, content(list of {title,text})
+                            if isinstance(data, list):
+                                for item in data:
+                                    try:
+                                        it_title = str(item.get('title', ''))
+                                        parts.append(it_title)
+                                        it_content = item.get('content', [])
+                                        if isinstance(it_content, list):
+                                            for c in it_content:
+                                                t = c.get('title')
+                                                x = c.get('text')
+                                                if t:
+                                                    parts.append(str(t))
+                                                if x:
+                                                    parts.append(str(x))
+                                    except Exception:
+                                        continue
+                            else:
+                                # если объект, просто сериализуем
+                                parts.append(_json.dumps(data, ensure_ascii=False))
+                            content = "\n".join([p for p in parts if p]).strip()
                         except Exception as e:
-                            # keep previous error if any
-                            extraction_error = extraction_error or str(e)
+                            extraction_error = f"json-extract: {e}"
+                    else:
+                        # Assume PDF or other text-bearing formats
+                        try:
+                            import PyPDF2
+                            with open(doc_path, 'rb') as file:
+                                pdf_reader = PyPDF2.PdfReader(file)
+                                for page in pdf_reader.pages:
+                                    extracted = page.extract_text() or ""
+                                    content += extracted + "\n"
+                        except Exception as e:
+                            extraction_error = str(e)
+
+                        # Fallback: PyMuPDF (fitz) if content is still too small
+                        if len(content.strip()) < 50:
+                            try:
+                                import fitz  # PyMuPDF
+                                with fitz.open(doc_path) as pdf_doc:
+                                    content = "\n".join([page.get_text() or "" for page in pdf_doc])
+                            except Exception as e:
+                                # keep previous error if any
+                                extraction_error = extraction_error or str(e)
+                        
+                        # Fallback: OCR for scanned documents if content is still too small
+                        if len(content.strip()) < 50:
+                            try:
+                                from modules.documents.ocr_processor import OCRProcessor
+                                ocr_processor = OCRProcessor()
+                                ocr_result = ocr_processor.process_document(doc_path)
+                                if ocr_result['success'] and ocr_result['text_content']:
+                                    content = ocr_result['text_content']
+                                    extraction_error = None  # Clear error if OCR succeeded
+                                    print(f"✅ OCR успешно извлек текст из {Path(doc_path).name}")
+                                else:
+                                    extraction_error = extraction_error or "OCR не смог извлечь текст"
+                            except Exception as e:
+                                # keep previous error if any
+                                extraction_error = extraction_error or f"OCR error: {str(e)}"
 
                     # If still empty, create minimal placeholder
                     if not content.strip():
@@ -274,6 +348,13 @@ class MultiKBRAG:
             
             # Create vectorstore
             vectorstore = FAISS.from_documents(chunks, self.embeddings)
+            
+            # Try to save vectorstore to disk for faster loading
+            try:
+                vectorstore_path = f"data/knowledge_bases/vectorstore_{kb_id}"
+                vectorstore.save_local(vectorstore_path)
+            except Exception as e:
+                print(f"⚠️ Не удалось сохранить векторный индекс для KB {kb_id}: {e}")
             
             # Store in memory
             self.vectorstores[kb_id] = vectorstore
@@ -373,7 +454,18 @@ class MultiKBRAG:
             'детализирован': 5,
             'отчет': 3,
             'формат': 3,
-            'трафик': 2,
+            'трафик': 3,
+            # Domain-specific terms for billing rules
+            'абонентская': 6,
+            'плата': 4,
+            'включенный': 5,
+            'включенного': 5,
+            'превышающ': 4,
+            'пропорционально': 8,
+            'доле': 3,
+            'активных': 6,
+            'дней': 3,
+            'sbd': 5,
         }
         
         scored = []
@@ -423,30 +515,43 @@ class MultiKBRAG:
             # Format context
             context = self._format_documents(relevant_docs)
             
-            # Create prompt
-            template = """Ты - эксперт по спутниковой связи и телекоммуникациям. 
-            Отвечай на вопросы пользователя, используя предоставленный контекст.
+            # Create prompt (unified for all providers)
+            default_rag_prompt = (
+                "Вопрос: {question}\n\n"
+                "Контекст из базы знаний:\n{context}\n\n"
+                "КРИТИЧЕСКИ ВАЖНО:\n"
+                "- ВСЕГДА внимательно анализируй предоставленный контекст\n"
+                "- Если информация есть в контексте — ОБЯЗАТЕЛЬНО используй её в ответе\n"
+                "- НИКОГДА не отвечай \"не найдено релевантной информации\", если в контексте есть косвенно релевантные данные\n"
+                "- Если есть пункты/разделы с подходящей информацией — явно ссылайся на них по смыслу\n"
+                "- Если информации недостаточно — напиши: \"Недостаточно данных в БЗ для точного ответа\"\n\n"
+                "Правила ответа:\n"
+                "1. Отвечай ТОЛЬКО на русском языке\n"
+                "2. Будь конкретным и кратким (2–6 предложений)\n"
+                "3. Используй только факты из контекста, без выдумки\n"
+                "4. Для биллинга учитывай термины: абонентская плата, включенный трафик, финансовый период, активный/неактивный день\n"
+                "5. Для вопросов о деактивации используй положения о деактивации/активации\n\n"
+                "Структура ответа:\n"
+                "- Краткий однозначный вывод\n"
+                "- Ключевые условия/ограничения (по пунктам, если нужно)\n"
+                "- [LEGACY] добавляй только если контекст относится к старой системе\n\n"
+                "Ответ:"
+            )
+            # Try to load external prompt override
+            try:
+                prompt_path = Path("resources/prompts/rag_prompt.txt")
+                if prompt_path.exists():
+                    with open(prompt_path, "r", encoding="utf-8") as f:
+                        default_rag_prompt = f.read()
+            except Exception:
+                pass
 
-КОНТЕКСТ:
-{context}
-
-ВОПРОС: {question}
-
-ПРАВИЛА ОТВЕТА:
-1. Отвечай ТОЛЬКО на русском языке
-2. Используй информацию из контекста - ищи точные совпадения и релевантные фрагменты
-3. Если информации недостаточно, честно скажи об этом
-4. Будь точным и профессиональным
-5. Указывай источники информации (название документа)
-6. Если в контексте есть точная информация по вопросу, обязательно используй её
-7. Не придумывай информацию, которой нет в контексте
-
-ОТВЕТ:"""
-
-            prompt = ChatPromptTemplate.from_template(template)
+            prompt = ChatPromptTemplate.from_template(default_rag_prompt)
             # Keep model output as AIMessage to access usage metadata when available
             chain = prompt | self.chat_model
             
+            # Simple direct call without timeout for now
+            # TODO: Implement proper timeout mechanism
             model_output = chain.invoke({
                 "context": context,
                 "question": question
@@ -480,6 +585,25 @@ class MultiKBRAG:
             
         except Exception as e:
             return f"Ошибка получения ответа: {e}"
+    
+    def preview_context(self, question: str, kb_ids: List[int] = None, k: int = 4) -> Dict:
+        """Вернуть сформированный контекст и источники для отладки/отображения в UI."""
+        try:
+            relevant_docs = self.search_across_kbs(question, kb_ids, k=k)
+            if not relevant_docs:
+                return {"context": "", "sources": [], "docs": []}
+            context = self._format_documents(relevant_docs)
+            sources = []
+            for doc in relevant_docs:
+                sources.append({
+                    "preview": doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content,
+                    "kb_name": doc.metadata.get('kb_name', 'Unknown'),
+                    "kb_category": doc.metadata.get('kb_category', 'Unknown'),
+                    "title": doc.metadata.get('title', '')
+                })
+            return {"context": context, "sources": sources, "docs": relevant_docs}
+        except Exception:
+            return {"context": "", "sources": [], "docs": []}
     
     def _format_documents(self, docs: List[Document]) -> str:
         """Format documents for context"""
@@ -581,7 +705,7 @@ class MultiKBRAG:
         except Exception as e:
             return [{"error": str(e)}]
     
-    def ask_question(self, question: str, kb_names: Optional[List[str]] = None) -> Dict:
+    def ask_question(self, question: str, kb_names: Optional[List[str]] = None, context_limit: int = 5) -> Dict:
         """Ask a question using RAG - API wrapper"""
         try:
             # Convert kb_names to kb_ids if provided
@@ -595,10 +719,10 @@ class MultiKBRAG:
                             break
             
             # Get response with context
-            answer = self.get_response_with_context(question, kb_ids, context_limit=3)
+            answer = self.get_response_with_context(question, kb_ids, context_limit=context_limit)
             
-            # Get sources
-            relevant_docs = self.search_across_kbs(question, kb_ids, k=3)
+            # Get sources (use same kb_ids as for response)
+            relevant_docs = self.search_across_kbs(question, kb_ids, k=context_limit)
             sources = []
             kb_used = set()
             

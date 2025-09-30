@@ -26,11 +26,16 @@ from modules.integrations import MediaWikiClient, KBToWikiPublisher
 from modules.rag.multi_kb_rag import MultiKBRAG
 from langchain_community.vectorstores import FAISS
 
+# Import KB Admin API modules
+sys.path.append(str(Path(__file__).parent.parent / "kb_admin"))
+from kb_admin.modules.api.kb_test_questions_api import router as kb_test_questions_router
+from kb_admin.modules.api.kb_management_api import router as kb_management_router
+
 # FastAPI app
 app = FastAPI(
-    title="СТЭККОМ Billing API",
-    description="REST API для системы спутниковой связи СТЭККОМ",
-    version="1.0.0",
+    title="СТЭККОМ Unified API",
+    description="REST API для системы спутниковой связи СТЭККОМ: биллинг, базы знаний и RAG",
+    version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc"
 )
@@ -43,6 +48,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include KB Admin API routers
+app.include_router(kb_test_questions_router)
+app.include_router(kb_management_router)
 
 # Security
 security = HTTPBearer()
@@ -187,9 +196,24 @@ def require_role(required_role: str):
 async def root():
     """Root endpoint"""
     return {
-        "message": "СТЭККОМ Billing API",
-        "version": "1.0.0",
-        "docs": "/docs"
+        "message": "СТЭККОМ Unified API",
+        "version": "2.0.0",
+        "description": "REST API для системы спутниковой связи СТЭККОМ",
+        "features": [
+            "Биллинг и тарифы",
+            "Управление базами знаний",
+            "RAG система для поиска",
+            "Тестирование релевантности БЗ",
+            "Интеграция с MediaWiki"
+        ],
+        "docs": "/docs",
+        "endpoints": {
+            "billing": "/agreements, /devices, /reports",
+            "knowledge_bases": "/kb-management/knowledge-bases",
+            "rag": "/rag/search, /rag/ask",
+            "test_questions": "/kb-test-questions",
+            "wiki": "/wiki/publish"
+        }
     }
 
 @app.post("/auth/login", response_model=Token)
