@@ -24,7 +24,7 @@ OLLAMA_API_KEY = "ollama"
 MODELS = {
     # Текстовые модели
     "chat": "qwen3:8b",
-    "sql": "qwen3:8b", 
+    "sql": "qwen2.5:1.5b", 
     "embedding": "all-minilm",
     
     # Vision модели

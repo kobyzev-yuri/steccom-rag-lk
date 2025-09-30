@@ -387,6 +387,28 @@ def get_database_schema() -> str:
     conn.close()
     return schema
 
+def get_billing_schema() -> str:
+    """Get optimized schema for billing operations only"""
+    conn = sqlite3.connect('satellite_billing.db')
+    cursor = conn.cursor()
+    
+    # Only billing-related tables
+    billing_tables = [
+        'users', 'service_types', 'tariffs', 'agreements', 
+        'devices', 'sessions', 'billing_records'
+    ]
+    
+    schema = "Database Schema (Billing Tables Only):\n\n"
+    for table_name in billing_tables:
+        try:
+            schema += get_table_schema(conn, table_name) + "\n"
+        except:
+            # Table might not exist, skip
+            pass
+    
+    conn.close()
+    return schema
+
 
 def execute_query(query: str, params: Tuple = ()) -> Tuple[pd.DataFrame, Optional[str]]:
     """Execute a SQL query and return results as DataFrame"""

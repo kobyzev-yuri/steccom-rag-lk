@@ -25,6 +25,7 @@ class SQLAgent(BaseAgent):
     def __init__(self):
         super().__init__("SQLAgent", "sql")
         self.client = OpenAI(base_url=self.ollama_base_url + "/v1", api_key="ollama")
+        self.use_proxyapi = False
     
     def update_model(self, new_model: str) -> bool:
         """Обновить модель SQL Agent"""
@@ -36,6 +37,23 @@ class SQLAgent(BaseAgent):
         else:
             logger.warning(f"Модель {new_model} не поддерживает SQL генерацию")
             return False
+    
+    def set_provider(self, provider: str, model: str = None, **kwargs):
+        """Переключить провайдера (ollama/proxyapi)"""
+        if provider == "ollama":
+            self.use_proxyapi = False
+            self.client = OpenAI(base_url=self.ollama_base_url + "/v1", api_key="ollama")
+            if model:
+                self.model_name = model
+        elif provider == "proxyapi":
+            self.use_proxyapi = True
+            base_url = kwargs.get('base_url', 'https://api.proxyapi.ru/openai/v1')
+            api_key = kwargs.get('api_key', '')
+            self.client = OpenAI(base_url=base_url, api_key=api_key)
+            if model:
+                self.model_name = model
+        else:
+            raise ValueError(f"Неподдерживаемый провайдер: {provider}")
     
     def _is_sql_compatible_model(self, model: str) -> bool:
         """Проверить, поддерживает ли модель SQL генерацию"""
@@ -80,12 +98,23 @@ class SQLAgent(BaseAgent):
             except:
                 selected_model = self.model_name
             
+            # Автоматически определяем провайдера по модели
+            if selected_model == 'gpt-4o':
+                # Переключаемся на ProxyAPI для GPT-4o
+                if not self.use_proxyapi:
+                    self.set_provider("proxyapi", "gpt-4o")
+            else:
+                # Переключаемся на Ollama для локальных моделей
+                if self.use_proxyapi:
+                    self.set_provider("ollama", selected_model)
+            
             # Генерируем SQL запрос
             response = self.client.chat.completions.create(
                 model=selected_model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.1,
-                max_tokens=2000
+                max_tokens=2000,
+                timeout=120  # Увеличиваем таймаут до 2 минут
             )
             
             raw_response = response.choices[0].message.content.strip()
