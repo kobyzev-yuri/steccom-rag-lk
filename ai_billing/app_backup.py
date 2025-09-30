@@ -98,30 +98,30 @@ def initialize_rag_system():
             st.session_state.rag_initializing = True
             
             # Initialize Multi-KB RAG
-            st.session_state.multi_rag = MultiKBRAG()
-            
+                st.session_state.multi_rag = MultiKBRAG()
+                
             # Set default RAG model
-            if 'rag_assistant_model' not in st.session_state:
-                st.session_state.rag_assistant_model = 'qwen2.5:1.5b'
-            
-            # Apply the selected RAG model
-            try:
-                st.session_state.multi_rag.set_chat_backend("ollama", st.session_state.rag_assistant_model)
-            except Exception as e:
+                if 'rag_assistant_model' not in st.session_state:
+                    st.session_state.rag_assistant_model = 'qwen2.5:1.5b'
+                
+                # Apply the selected RAG model
+                try:
+                    st.session_state.multi_rag.set_chat_backend("ollama", st.session_state.rag_assistant_model)
+                except Exception as e:
                 print(f"Не удалось установить RAG модель: {e}")
-            
+                
             # Load active knowledge bases
-            try:
-                loaded_count = st.session_state.multi_rag.load_all_active_kbs()
-                print(f"✅ Загружено активных БЗ: {loaded_count}")
-            except Exception as e:
+                try:
+                    loaded_count = st.session_state.multi_rag.load_all_active_kbs()
+                    print(f"✅ Загружено активных БЗ: {loaded_count}")
+                except Exception as e:
                 print(f"Ошибка при загрузке активных БЗ: {e}")
-            
+                
             # Get available KBs info
-            available_kbs = st.session_state.multi_rag.get_available_kbs()
-            st.session_state.kb_loaded_count = len(available_kbs)
-            st.session_state.loaded_kbs_info = available_kbs
-            st.session_state.rag_initialized = True
+                available_kbs = st.session_state.multi_rag.get_available_kbs()
+                st.session_state.kb_loaded_count = len(available_kbs)
+                st.session_state.loaded_kbs_info = available_kbs
+                st.session_state.rag_initialized = True
             
         except Exception as e:
             print(f"Ошибка инициализации RAG: {e}")
@@ -166,6 +166,7 @@ def render_staff_view():
         - 🤖 **RAG Assistant** - настройка моделей для работы с базами знаний
         - 📊 **Статистика токенов** - мониторинг использования
         """)
+
 
         # Token usage statistics
         try:
@@ -488,7 +489,7 @@ def render_model_management():
             except Exception as e:
                 df_usage = None
                 st.warning(f"Таблица llm_usage недоступна: {e}")
-            finally:
+        finally:
                 conn.close()
 
             if df_usage is not None and not df_usage.empty:
@@ -523,7 +524,7 @@ def render_model_management():
                 st.dataframe(model_stats, use_container_width=True)
             else:
                 st.info("Нет данных об использовании токенов")
-        else:
+    else:
             st.warning("База данных не найдена")
     except Exception as e:
         st.error(f"Ошибка при загрузке статистики: {e}")
@@ -620,7 +621,7 @@ def main():
         )
         
         if view_choice == "🏠 Личный кабинет":
-            render_user_view()
+        render_user_view()
         else:  # Управление моделями
             render_model_management()
     
@@ -632,8 +633,7 @@ def main():
             'current_report_type', 'current_user_question', 'current_assistant_question',
             'current_sql_query', 'current_query_explanation', 'current_query_results',
             'assistant_answer', 'chart_widget_counter', 'download_widget_counter',
-            'plotly_chart_counter', 'rag_initialized', 'rag_initializing', 'multi_rag',
-            'kb_loaded_count', 'loaded_kbs_info', 'sql_assistant_model', 'rag_assistant_model'
+            'plotly_chart_counter'
         ]
         for key in keys_to_clear:
             if key in st.session_state:

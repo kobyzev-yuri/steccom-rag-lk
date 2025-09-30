@@ -102,7 +102,10 @@ class SQLAgent(BaseAgent):
             if selected_model == 'gpt-4o':
                 # Переключаемся на ProxyAPI для GPT-4o
                 if not self.use_proxyapi:
-                    self.set_provider("proxyapi", "gpt-4o")
+                    import os
+                    self.set_provider("proxyapi", "gpt-4o", 
+                                    base_url=os.getenv("PROXYAPI_BASE_URL", "https://api.proxyapi.ru/openai/v1"),
+                                    api_key=os.getenv("PROXYAPI_API_KEY", ""))
             else:
                 # Переключаемся на Ollama для локальных моделей
                 if self.use_proxyapi:
