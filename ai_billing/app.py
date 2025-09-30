@@ -1,43 +1,27 @@
 """
-Satellite Billing System - Main Application
-Refactored version with modular structure
+AI Billing System - Simplified Application
+Focused on using Knowledge Bases through RAG system
 """
 
 import streamlit as st
 import logging
 from logging.handlers import RotatingFileHandler
-import sqlite3
-import pandas as pd
-from datetime import datetime
-from typing import Optional, List, Dict
-import hashlib
-from openai import OpenAI
-# Optional import for RAGHelper
-try:
-    from modules.rag.rag_helper import RAGHelper
-    RAG_HELPER_AVAILABLE = True
-except ImportError:
-    RAG_HELPER_AVAILABLE = False
-    print("⚠️ RAGHelper недоступен: langchain_huggingface не установлен")
-# Force-disable RAGHelper to avoid startup errors; use MultiKBRAG only
-RAG_HELPER_AVAILABLE = False
 import os
 import sys
-import plotly.express as px
-import plotly.graph_objects as go
 
-# Import our custom modules
-from modules.core import init_db, verify_login, _generate_quick_question, QUICK_QUESTIONS
-from modules.ui import render_user_view, render_staff_view
+# Add parent directory to path for imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Initialize OpenAI client
-client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
+# Import core modules
+from modules.core import init_db, verify_login
+from modules.rag.multi_kb_rag import MultiKBRAG
 
-# Configure application logging (file + console)
+# Configure application logging
 def _configure_logging() -> None:
+    """Configure logging for the application"""
     try:
         os.makedirs("logs", exist_ok=True)
-        log_path = os.path.join("logs", "app.log")
+        log_path = os.path.join("logs", "ai_billing.log")
         logger = logging.getLogger()
         logger.setLevel(logging.INFO)
 
@@ -55,12 +39,11 @@ def _configure_logging() -> None:
             ch.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s'))
             logger.addHandler(ch)
     except Exception as e:
-        # Last resort print to avoid breaking the app initialization
         print(f"Logging configuration failed: {e}")
 
 
 def initialize_session_state():
-    """Initialize session state variables safely"""
+    """Initialize session state variables"""
     # Authentication state
     st.session_state.setdefault('authenticated', False)
     st.session_state.setdefault('username', None)
@@ -68,116 +51,62 @@ def initialize_session_state():
     st.session_state.setdefault('company', None)
     st.session_state.setdefault('is_staff', False)
     
-    # UI state
-    st.session_state.setdefault('current_report_type', "Текущий договор")
-    st.session_state.setdefault('current_user_question', "")
-    st.session_state.setdefault('current_assistant_question', "")
-    st.session_state.setdefault('current_sql_query', "")
-    st.session_state.setdefault('current_query_explanation', "")
-    st.session_state.setdefault('current_query_results', None)
-    st.session_state.setdefault('assistant_answer', "")
-    
     # RAG system state
     st.session_state.setdefault('rag_initialized', False)
     st.session_state.setdefault('rag_initializing', False)
-    st.session_state.setdefault('rag_helper', None)
     st.session_state.setdefault('multi_rag', None)
     st.session_state.setdefault('kb_loaded_count', 0)
     st.session_state.setdefault('loaded_kbs_info', [])
+    
+    # UI state
+    st.session_state.setdefault('user_question', "")
+    st.session_state.setdefault('rag_response', "")
 
 
 def initialize_rag_system():
-    """Initialize RAG system safely"""
-    print(f"🔍 DEBUG: initialize_rag_system вызвана, rag_initialized = {st.session_state.rag_initialized}")
-    
-    # Reentrancy guard for Streamlit reruns
+    """Initialize RAG system for Knowledge Base access"""
     if st.session_state.get('rag_initializing'):
-        print("🔍 DEBUG: Инициализация уже идет (rag_initializing=True), пропускаем повторный вызов")
         return
 
     if not st.session_state.rag_initialized:
         try:
-            print("🔍 DEBUG: Начинаем инициализацию RAG системы...")
-            print(f"🔍 DEBUG: RAG_HELPER_AVAILABLE = {RAG_HELPER_AVAILABLE}")
             st.session_state.rag_initializing = True
-            init_ok = False
             
-            # Initialize multi-KB RAG first (stable path)
+            # Initialize Multi-KB RAG
+            st.session_state.multi_rag = MultiKBRAG()
+            
+            # Set default RAG model
+            if 'rag_assistant_model' not in st.session_state:
+                st.session_state.rag_assistant_model = 'qwen2.5:1.5b'
+            
+            # Apply the selected RAG model
             try:
-                print("🔍 DEBUG: Пытаемся импортировать MultiKBRAG...")
-                print("🔍 DEBUG: Путь к модулю: modules.rag.multi_kb_rag")
-                
-                # Проверяем, существует ли файл
-                import os
-                module_path = "modules/rag/multi_kb_rag.py"
-                if os.path.exists(module_path):
-                    print(f"🔍 DEBUG: Файл {module_path} существует")
-                else:
-                    print(f"❌ DEBUG: Файл {module_path} НЕ существует!")
-                
-                from modules.rag.multi_kb_rag import MultiKBRAG
-                print("🔍 DEBUG: MultiKBRAG импортирован успешно, создаем экземпляр...")
-                st.session_state.multi_rag = MultiKBRAG()
-                
-                # Set default RAG model if not set
-                if 'rag_assistant_model' not in st.session_state:
-                    st.session_state.rag_assistant_model = 'qwen2.5:1.5b'
-                
-                # Apply the selected RAG model
-                try:
-                    st.session_state.multi_rag.set_chat_backend("ollama", st.session_state.rag_assistant_model)
-                    print(f"🔍 DEBUG: RAG модель установлена: {st.session_state.rag_assistant_model}")
-                except Exception as e:
-                    print(f"⚠️ DEBUG: Не удалось установить RAG модель: {e}")
-                
-                # Load active knowledge bases into memory
-                print("🔍 DEBUG: Загружаем активные базы знаний...")
-                try:
-                    loaded_count = st.session_state.multi_rag.load_all_active_kbs()
-                    print(f"✅ Загружено активных БЗ: {loaded_count}")
-                except Exception as e:
-                    print(f"❌ DEBUG: Ошибка при загрузке активных БЗ: {e}")
-                
-                # Read available KBs after load
-                available_kbs = st.session_state.multi_rag.get_available_kbs()
-                st.session_state.kb_loaded_count = len(available_kbs)
-                st.session_state.loaded_kbs_info = available_kbs
-                init_ok = True
-                print(f"✅ Multi-KB RAG инициализирован: {len(available_kbs)} БЗ")
-                # Set RAG as initialized here to avoid RAGHelper path
-                st.session_state.rag_initialized = True
-                
-            except ImportError as e:
-                print(f"❌ DEBUG: ImportError при импорте MultiKBRAG: {e}")
-                print(f"🔍 DEBUG: Тип ошибки: {type(e)}")
-                st.session_state.multi_rag = None
-                st.session_state.kb_loaded_count = 0
-                st.session_state.loaded_kbs_info = []
-                print(f"⚠️ Multi-KB RAG недоступен: {e}")
+                st.session_state.multi_rag.set_chat_backend("ollama", st.session_state.rag_assistant_model)
             except Exception as e:
-                print(f"❌ DEBUG: Exception при инициализации MultiKBRAG: {e}")
-                print(f"🔍 DEBUG: Тип ошибки: {type(e)}")
-                st.session_state.multi_rag = None
-                st.session_state.kb_loaded_count = 0
-                st.session_state.loaded_kbs_info = []
-                print(f"⚠️ Multi-KB RAG недоступен: {e}")
-                
-            # Skip RAGHelper initialization for stability
-            st.session_state.rag_helper = None
+                st.error(f"Не удалось установить RAG модель: {e}")
+            
+            # Load active knowledge bases
+            try:
+                loaded_count = st.session_state.multi_rag.load_all_active_kbs()
+                st.success(f"✅ Загружено активных БЗ: {loaded_count}")
+            except Exception as e:
+                st.error(f"Ошибка при загрузке активных БЗ: {e}")
+            
+            # Get available KBs info
+            available_kbs = st.session_state.multi_rag.get_available_kbs()
+            st.session_state.kb_loaded_count = len(available_kbs)
+            st.session_state.loaded_kbs_info = available_kbs
+            st.session_state.rag_initialized = True
+            
         except Exception as e:
-            print(f"❌ DEBUG: Общая ошибка инициализации RAG: {e}")
-            print(f"🔍 DEBUG: Тип ошибки: {type(e)}")
-            print(f"❌ Ошибка инициализации RAG: {e}")
+            st.error(f"Ошибка инициализации RAG: {e}")
         finally:
-            # Always clear initializing flag
             st.session_state.rag_initializing = False
-    else:
-        print("🔍 DEBUG: RAG система уже инициализирована, пропускаем")
 
 
 def login_page():
     """Render login page"""
-    st.title("🛰️ СТЭККОМ - Система спутниковой связи")
+    st.title("🛰️ СТЭККОМ - AI Billing System")
     st.markdown("### Вход в систему")
     
     with st.form("login_form"):
@@ -189,18 +118,6 @@ def login_page():
             if username and password:
                 success, role, company = verify_login(username, password)
                 if success:
-                    # Reset per-user UI/session state to avoid leakage across logins
-                    ui_keys = [
-                        'current_report_type', 'current_user_question', 'current_assistant_question',
-                        'current_sql_query', 'current_query_explanation', 'current_query_results',
-                        'assistant_answer', 'chart_widget_counter', 'download_widget_counter',
-                        'plotly_chart_counter'
-                    ]
-                    for k in ui_keys:
-                        if k in st.session_state:
-                            del st.session_state[k]
-
-                    # Set authentication state
                     st.session_state.authenticated = True
                     st.session_state.username = username
                     st.session_state.role = role
@@ -214,22 +131,110 @@ def login_page():
                 st.error("Пожалуйста, заполните все поля")
 
 
+def render_rag_interface():
+    """Render RAG interface for Knowledge Base queries"""
+    st.title("🤖 AI Assistant - Работа с Базами Знаний")
+    
+    # System status
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📊 Статус системы")
+    
+    if st.session_state.get('rag_initialized'):
+        st.sidebar.success("✅ RAG система активна")
+    else:
+        st.sidebar.warning("⚠️ RAG система недоступна")
+    
+    if st.session_state.get('kb_loaded_count', 0) > 0:
+        st.sidebar.success(f"📚 Загружено БЗ: {st.session_state.kb_loaded_count}")
+        
+        if st.session_state.get('loaded_kbs_info'):
+            with st.sidebar.expander("📋 Детали БЗ"):
+                for kb in st.session_state.loaded_kbs_info:
+                    st.write(f"• {kb}")
+    else:
+        st.sidebar.warning("📚 Базы знаний не загружены")
+    
+    # RAG query interface
+    st.markdown("### 💬 Задайте вопрос по базам знаний")
+    
+    # Model selection
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        model_options = ['qwen2.5:1.5b', 'qwen3:8b', 'llama3.1:8b']
+        selected_model = st.selectbox(
+            "Выберите модель для RAG:",
+            model_options,
+            index=model_options.index(st.session_state.get('rag_assistant_model', 'qwen2.5:1.5b'))
+        )
+        
+        if selected_model != st.session_state.get('rag_assistant_model'):
+            st.session_state.rag_assistant_model = selected_model
+            if st.session_state.multi_rag:
+                try:
+                    st.session_state.multi_rag.set_chat_backend("ollama", selected_model)
+                    st.success(f"Модель изменена на: {selected_model}")
+                except Exception as e:
+                    st.error(f"Ошибка смены модели: {e}")
+    
+    with col2:
+        if st.button("🔄 Перезагрузить БЗ"):
+            if st.session_state.multi_rag:
+                try:
+                    loaded_count = st.session_state.multi_rag.load_all_active_kbs()
+                    st.success(f"✅ Перезагружено БЗ: {loaded_count}")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Ошибка перезагрузки БЗ: {e}")
+    
+    # Question input
+    user_question = st.text_area(
+        "Введите ваш вопрос:",
+        value=st.session_state.get('user_question', ''),
+        height=100,
+        placeholder="Например: Какие документы есть по спутниковой связи?"
+    )
+    
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        ask_button = st.button("🔍 Задать вопрос", type="primary")
+    
+    # Process question
+    if ask_button and user_question:
+        if not st.session_state.rag_initialized or not st.session_state.multi_rag:
+            st.error("RAG система не инициализирована")
+        else:
+            with st.spinner("Ищу ответ в базах знаний..."):
+                try:
+                    response = st.session_state.multi_rag.query(user_question)
+                    st.session_state.rag_response = response
+                    st.session_state.user_question = user_question
+                except Exception as e:
+                    st.error(f"Ошибка при поиске ответа: {e}")
+    
+    # Display response
+    if st.session_state.get('rag_response'):
+        st.markdown("### 📝 Ответ:")
+        st.markdown(st.session_state.rag_response)
+        
+        # Clear response button
+        if st.button("🗑️ Очистить ответ"):
+            st.session_state.rag_response = ""
+            st.session_state.user_question = ""
+            st.rerun()
+
+
 def main():
     """Main application function"""
-    # Configure logging early
+    # Configure logging
     _configure_logging()
-    try:
-        import importlib.metadata as im
-        print(f"🔧 versions: sentence-transformers={im.version('sentence-transformers')}, transformers={im.version('transformers')}, langchain-huggingface={im.version('langchain-huggingface')}")
-    except Exception as _ver_e:
-        print(f"🔧 version check failed: {_ver_e}")
+    
     # Initialize database
     init_db()
     
     # Initialize session state
     initialize_session_state()
     
-    # Hide Streamlit main menu (including Clear cache)
+    # Hide Streamlit main menu
     st.markdown("""
     <style>
     [data-testid="stMainMenu"] {visibility: hidden;}
@@ -246,32 +251,19 @@ def main():
         login_page()
         return
     
-    # Main application interface
-    if st.session_state.is_staff:
-        # Staff view with choice between user and admin interfaces
-        view_choice = st.sidebar.radio(
-            "Выберите режим:",
-            ["🏠 Личный кабинет", "🔧 Админ-панель"],
-            key="staff_view_choice"
-        )
-        
-        if view_choice == "🏠 Личный кабинет":
-            render_user_view()
-        else:
-            render_staff_view()
-    else:
-        # Regular user view
-        render_user_view()
+    # Main interface
+    st.sidebar.title(f"👋 {st.session_state.username}")
+    st.sidebar.markdown(f"**Роль:** {st.session_state.role}")
+    st.sidebar.markdown(f"**Компания:** {st.session_state.company}")
+    
+    # Render RAG interface
+    render_rag_interface()
     
     # Logout button
     if st.sidebar.button("🚪 Выйти"):
-        # Clear authentication-related and per-user UI session state
         keys_to_clear = [
             'authenticated', 'username', 'role', 'company', 'is_staff',
-            'current_report_type', 'current_user_question', 'current_assistant_question',
-            'current_sql_query', 'current_query_explanation', 'current_query_results',
-            'assistant_answer', 'chart_widget_counter', 'download_widget_counter',
-            'plotly_chart_counter'
+            'user_question', 'rag_response'
         ]
         for key in keys_to_clear:
             if key in st.session_state:
