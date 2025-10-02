@@ -31,7 +31,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from modules.core import init_db, verify_login
 from modules.ui import render_user_view, render_staff_view
 from modules.ui.prompt_manager import PromptManager
-from modules.rag.multi_kb_rag import MultiKBRAG
+from modules.rag.kb_admin_rag import KBAdminRAG
 
 # Configure application logging
 def _configure_logging() -> None:
@@ -98,21 +98,30 @@ def initialize_rag_system():
         try:
             st.session_state.rag_initializing = True
             
-            # Initialize Multi-KB RAG
-            st.session_state.multi_rag = MultiKBRAG()
+            # Force RAG model to GPT-4o
+            st.session_state.rag_assistant_model = 'gpt-4o'
             
-            # Set default RAG model
-            if 'rag_assistant_model' not in st.session_state:
-                st.session_state.rag_assistant_model = 'qwen2.5:1.5b'
+            # Initialize KB Admin RAG with GPT-4o by default
+            rag_model = st.session_state.rag_assistant_model
+            print(f"🔧 Инициализация RAG с моделью: {rag_model}")
             
-            # Apply the selected RAG model
-            try:
-                rag_model = st.session_state.rag_assistant_model
-                print(f"🔧 Инициализация RAG с моделью: {rag_model}")
-                st.session_state.multi_rag.set_chat_backend("ollama", rag_model)
+            if rag_model == 'gpt-4o':
+                # Initialize with GPT-4o via ProxyAPI
+                st.session_state.multi_rag = KBAdminRAG(
+                    chat_provider="proxyapi",
+                    chat_model="gpt-4o",
+                    proxy_base_url=os.getenv("PROXYAPI_BASE_URL", "https://api.proxyapi.ru/openai/v1"),
+                    proxy_api_key=os.getenv("PROXYAPI_API_KEY", ""),
+                    temperature=0.2
+                )
+                print(f"✅ RAG модель установлена: GPT-4o через ProxyAPI")
+            else:
+                # Initialize with Ollama
+                st.session_state.multi_rag = KBAdminRAG(
+                    chat_provider="ollama",
+                    chat_model=rag_model
+                )
                 print(f"✅ RAG модель установлена: {rag_model}")
-            except Exception as e:
-                print(f"❌ Не удалось установить RAG модель: {e}")
             
             # Load active knowledge bases
             try:

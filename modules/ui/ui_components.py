@@ -4,6 +4,7 @@ Contains all Streamlit UI rendering functions
 """
 
 import streamlit as st
+import os
 import pandas as pd
 import sqlite3
 from datetime import datetime
@@ -12,7 +13,7 @@ import plotly.express as px
 
 # Optional RAG helper import for admin actions
 try:
-    from ..rag.multi_kb_rag import MultiKBRAG
+    from ..rag.kb_admin_rag import KBAdminRAG
     _RAG_AVAILABLE = True
 except Exception:
     _RAG_AVAILABLE = False
@@ -31,7 +32,13 @@ def render_user_view():
     # Инициализация RAG helper если не инициализирован
     if _RAG_AVAILABLE and not st.session_state.get('rag_helper'):
         try:
-            st.session_state.rag_helper = MultiKBRAG()
+            st.session_state.rag_helper = KBAdminRAG(
+                chat_provider="proxyapi",
+                chat_model="gpt-4o",
+                proxy_base_url=os.getenv("PROXYAPI_BASE_URL", "https://api.proxyapi.ru/openai/v1"),
+                proxy_api_key=os.getenv("PROXYAPI_API_KEY", ""),
+                temperature=0.2
+            )
         except Exception as e:
             st.warning(f"Не удалось инициализировать RAG систему: {e}")
     
@@ -350,6 +357,28 @@ def render_smart_assistant():
     with col_opts2:
         show_context = st.checkbox("Показать контекст", value=False, key="assistant_show_context")
 
+    # KB filter (prioritize technical guides for SBD questions)
+    kb_ids_selected = None
+    if st.session_state.get('rag_helper') and hasattr(st.session_state.rag_helper, 'kb_metadata'):
+        kb_meta = st.session_state.rag_helper.kb_metadata
+        if kb_meta:
+            kb_options = [(k, f"KB {k}: {v.get('name','')} — {v.get('category','')}") for k, v in kb_meta.items()]
+            kb_options = sorted(kb_options, key=lambda x: x[0])
+            # Default selection: KBs that look like technical guides
+            default_ids = [k for k, v in kb_meta.items() if 'техн' in (v.get('name','') + ' ' + v.get('category','')).lower()]
+            # Fallback: prefer KB id 20 if present
+            if not default_ids and 20 in kb_meta:
+                default_ids = [20]
+            labels = {k: label for k, label in kb_options}
+            selected = st.multiselect(
+                "Фильтр по базам знаний (рекомендуем: технические руководства)",
+                options=[k for k, _ in kb_options],
+                default=default_ids,
+                format_func=lambda k: labels.get(k, str(k)),
+                key="assistant_kb_filter_ids"
+            )
+            kb_ids_selected = selected if selected else None
+
     # Question input
     st.text_area(
         "💬 Ваш вопрос:",
@@ -365,10 +394,14 @@ def render_smart_assistant():
                 if st.session_state.get('rag_helper'):
                     # Determine role for filtering (admin can see user docs too)
                     role = 'admin' if st.session_state.get('is_staff') else 'user'
-                    response = st.session_state.rag_helper.get_response_with_context(assistant_question_val)
+                    response = st.session_state.rag_helper.get_response_with_context(
+                        assistant_question_val,
+                        kb_ids=kb_ids_selected,
+                        context_limit=3
+                    )
                     st.session_state.assistant_answer = response
                 else:
-                    # Use MultiKBRAG generative answer with limited context
+                    # Use KBAdminRAG generative answer with limited context
                     multi = st.session_state.get('multi_rag')
                     try:
                         if multi:
@@ -556,7 +589,7 @@ def render_staff_view():
                 model = st.text_input("OLLAMA_CHAT_MODEL", value=os.getenv("OLLAMA_CHAT_MODEL", "qwen2.5:1.5b"), key="ollama_model")
                 if st.button("Применить", key="apply_ollama_model"):
                     try:
-                        from ..rag.multi_kb_rag import MultiKBRAG
+                        from ..rag.kb_admin_rag import KBAdminRAG
                         if st.session_state.get('multi_rag'):
                             st.session_state.multi_rag.set_chat_backend("ollama", model)
                             st.success("Применено: Ollama → " + model)
@@ -800,7 +833,7 @@ def render_staff_view():
             if st.button("🔄 Перезагрузить RAG систему", key="admin_reload_rag"):
                 if _RAG_AVAILABLE:
                     try:
-                        st.session_state.rag_helper = MultiKBRAG()
+                        st.session_state.rag_helper = KBAdminRAG()
                         st.session_state.rag_initialized = True
                         st.success("RAG система перезагружена")
                     except Exception as e:
