@@ -200,18 +200,27 @@ class MultiKBRAG:
                     c = conn.cursor()
                     c.execute("SELECT * FROM knowledge_bases WHERE id = ? AND is_active = 1", (kb_id,))
                     kb_info = c.fetchone()
-                    conn.close()
                     
                     if kb_info:
                         self.vectorstores[kb_id] = vectorstore
+                        
+                        # Подсчитываем количество документов и чанков
+                        c.execute("SELECT COUNT(*) FROM knowledge_documents WHERE kb_id = ? AND processed = 1", (kb_id,))
+                        doc_count = c.fetchone()[0]
+                        
+                        c.execute("SELECT COUNT(*) FROM document_chunks dc JOIN knowledge_documents kd ON dc.doc_id = kd.id WHERE kd.kb_id = ? AND kd.processed = 1", (kb_id,))
+                        chunk_count = c.fetchone()[0]
+                        
+                        conn.close()
+                        
                         self.kb_metadata[kb_id] = {
                             'name': kb_info[1],
                             'description': kb_info[2],
                             'category': kb_info[3],
-                            'doc_count': 0,  # Will be updated when we load documents
-                            'chunk_count': 0
+                            'doc_count': doc_count,
+                            'chunk_count': chunk_count
                         }
-                        print(f"✅ Загружен сохраненный векторный индекс для KB {kb_id}")
+                        print(f"✅ Загружен сохраненный векторный индекс для KB {kb_id} (документов: {doc_count}, чанков: {chunk_count})")
                         return True
                 except Exception as e:
                     print(f"⚠️ Ошибка загрузки векторного индекса для KB {kb_id}: {e}")

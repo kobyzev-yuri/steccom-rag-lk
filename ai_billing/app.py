@@ -107,9 +107,12 @@ def initialize_rag_system():
             
             # Apply the selected RAG model
             try:
-                st.session_state.multi_rag.set_chat_backend("ollama", st.session_state.rag_assistant_model)
+                rag_model = st.session_state.rag_assistant_model
+                print(f"🔧 Инициализация RAG с моделью: {rag_model}")
+                st.session_state.multi_rag.set_chat_backend("ollama", rag_model)
+                print(f"✅ RAG модель установлена: {rag_model}")
             except Exception as e:
-                print(f"Не удалось установить RAG модель: {e}")
+                print(f"❌ Не удалось установить RAG модель: {e}")
             
             # Load active knowledge bases
             try:
@@ -233,41 +236,39 @@ def render_staff_view():
         with col_b:
             if st.button("📚 Проверить доступные KB", key="admin_list_kb"):
                 try:
-                    import glob
-                    kb_files = sorted(glob.glob("docs/kb/*.json"))
-                    if kb_files:
-                        st.write("Найденные KB файлы:")
-                        for f in kb_files:
-                            st.write(f"• {f}")
+                    if st.session_state.get('multi_rag'):
+                        available_kbs = st.session_state.multi_rag.get_available_kbs()
+                        if available_kbs:
+                            st.write("Найденные базы знаний:")
+                            for kb in available_kbs:
+                                st.write(f"• ID: {kb['kb_id']}, Название: {kb.get('name', 'N/A')}")
+                                st.write(f"  Документов: {kb.get('doc_count', 0)}, Чанков: {kb.get('chunk_count', 0)}")
+                        else:
+                            st.info("Базы знаний не найдены")
                     else:
-                        st.info("KB файлы в docs/kb/ не найдены")
+                        st.warning("RAG система не инициализирована")
                 except Exception as e:
                     st.error(f"Ошибка проверки KB: {e}")
 
         st.markdown("---")
-        st.subheader("KB Files Management")
-        try:
-            import glob
-            import os
-            import json
-            kb_files = sorted(glob.glob("docs/kb/*.json"))
-            selected_kb = st.selectbox("Выберите KB для действий:", ["—"] + kb_files, key="kb_select")
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("🗑️ Удалить выбранный KB", key="kb_delete"):
-                    if selected_kb != "—":
-                        try:
-                            os.remove(selected_kb)
-                            st.success(f"Удален: {selected_kb}")
-                        except Exception as e:
-                            st.error(f"Ошибка удаления: {e}")
-                    else:
-                        st.info("Выберите файл для удаления")
-            with col2:
-                if st.button("🔄 Обновить список", key="kb_refresh_list"):
-                    st.rerun()
-        except Exception as e:
-            st.error(f"Ошибка управления KB: {e}")
+        st.subheader("Базы знаний (новая система)")
+        st.info("ℹ️ Управление базами знаний теперь осуществляется через KB Admin. Перейдите в KB Admin для создания, редактирования и управления базами знаний.")
+        
+        # Показываем текущие базы знаний
+        if st.session_state.get('multi_rag'):
+            available_kbs = st.session_state.multi_rag.get_available_kbs()
+            if available_kbs:
+                st.write("**Текущие базы знаний:**")
+                for kb in available_kbs:
+                    st.write(f"• **{kb.get('name', 'N/A')}** (ID: {kb['kb_id']})")
+                    st.write(f"  - Описание: {kb.get('description', 'N/A')}")
+                    st.write(f"  - Категория: {kb.get('category', 'N/A')}")
+                    st.write(f"  - Документов: {kb.get('doc_count', 0)}, Чанков: {kb.get('chunk_count', 0)}")
+                    st.write("")
+            else:
+                st.warning("Базы знаний не загружены")
+        else:
+            st.warning("RAG система не инициализирована")
 
 
 def render_model_management():
@@ -275,8 +276,14 @@ def render_model_management():
     st.header("🤖 Управление моделями")
     st.markdown("---")
     
+    # Отладочная информация
+    print(f"🔍 render_model_management - SQL: {st.session_state.get('sql_assistant_model')}, RAG: {st.session_state.get('rag_assistant_model')}")
+    
     # SQL Assistant Model Configuration
     st.subheader("🧮 SQL Assistant")
+    
+    # Предупреждение о независимости настроек
+    st.info("ℹ️ **Важно:** Настройки SQL Assistant и RAG Assistant независимы. Изменение модели для одного не влияет на другой.")
     
     # Provider selection
     current_sql_model = st.session_state.get('sql_assistant_model', 'qwen2.5:1.5b')
@@ -349,7 +356,10 @@ def render_model_management():
         """)
         
         if st.button("Переключить на GPT-4o", key="apply_sql_gpt4o"):
+            print(f"🔄 Переключение SQL Assistant на GPT-4o")
+            print(f"📊 До изменения - SQL: {st.session_state.get('sql_assistant_model')}, RAG: {st.session_state.get('rag_assistant_model')}")
             st.session_state.sql_assistant_model = 'gpt-4o'
+            print(f"📊 После изменения SQL - SQL: {st.session_state.get('sql_assistant_model')}, RAG: {st.session_state.get('rag_assistant_model')}")
             # Обновляем SQL Agent для использования ProxyAPI
             try:
                 from modules.core.rag import sql_agent
@@ -366,6 +376,9 @@ def render_model_management():
     
     # RAG Assistant Model Configuration
     st.subheader("🤖 RAG Assistant")
+    
+    # Предупреждение о независимости настроек
+    st.info("ℹ️ **Важно:** Настройки SQL Assistant и RAG Assistant независимы. Изменение модели для одного не влияет на другой.")
     
     # Provider selection for RAG
     current_rag_model = st.session_state.get('rag_assistant_model', 'qwen2.5:1.5b')
@@ -409,10 +422,13 @@ def render_model_management():
                         # Update RAG system with new model
                         if st.session_state.get('multi_rag'):
                             try:
+                                print(f"🔄 Переключение RAG на Ollama модель: {selected_rag_model}")
                                 st.session_state.multi_rag.set_chat_backend("ollama", selected_rag_model)
+                                print(f"✅ RAG переключен на Ollama: {selected_rag_model}")
                                 st.success(f"RAG Assistant настроен на Ollama модель: {selected_rag_model}")
                                 st.rerun()  # Обновляем интерфейс
                             except Exception as e:
+                                print(f"❌ Ошибка переключения RAG на Ollama: {e}")
                                 st.error(f"Ошибка при обновлении RAG модели: {e}")
                         else:
                             st.success(f"RAG Assistant настроен на Ollama модель: {selected_rag_model}")
@@ -445,12 +461,15 @@ def render_model_management():
             if st.session_state.get('multi_rag'):
                 try:
                     import os
+                    print(f"🔄 Переключение RAG на GPT-4o через ProxyAPI")
                     st.session_state.multi_rag.set_chat_backend("proxyapi", "gpt-4o", 
                                                               base_url=os.getenv("PROXYAPI_BASE_URL", "https://api.proxyapi.ru/openai/v1"),
                                                               api_key=os.getenv("PROXYAPI_API_KEY", ""))
+                    print(f"✅ RAG переключен на GPT-4o")
                     st.success("RAG Assistant переключен на GPT-4o через ProxyAPI")
                     st.rerun()  # Обновляем интерфейс
                 except Exception as e:
+                    print(f"❌ Ошибка переключения RAG на GPT-4o: {e}")
                     st.error(f"Ошибка при обновлении RAG модели: {e}")
             else:
                 st.success("RAG Assistant переключен на GPT-4o")

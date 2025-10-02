@@ -12,7 +12,7 @@ import plotly.express as px
 
 # Optional RAG helper import for admin actions
 try:
-    from ..rag.rag_helper import RAGHelper
+    from ..rag.multi_kb_rag import MultiKBRAG
     _RAG_AVAILABLE = True
 except Exception:
     _RAG_AVAILABLE = False
@@ -27,6 +27,13 @@ from ..core.queries import STANDARD_QUERIES, QUICK_QUESTIONS
 def render_user_view():
     """Render the main user interface"""
     st.title("🏠 Личный кабинет СТЭККОМ")
+    
+    # Инициализация RAG helper если не инициализирован
+    if _RAG_AVAILABLE and not st.session_state.get('rag_helper'):
+        try:
+            st.session_state.rag_helper = MultiKBRAG()
+        except Exception as e:
+            st.warning(f"Не удалось инициализировать RAG систему: {e}")
     
     # Ссылка на документацию
     st.markdown("""
@@ -355,10 +362,10 @@ def render_smart_assistant():
         assistant_question_val = st.session_state.get('assistant_question', '')
         if assistant_question_val:
             with st.spinner("Ищу ответ..."):
-                if st.session_state.rag_helper:
+                if st.session_state.get('rag_helper'):
                     # Determine role for filtering (admin can see user docs too)
                     role = 'admin' if st.session_state.get('is_staff') else 'user'
-                    response = st.session_state.rag_helper.get_response(assistant_question_val, role=role)
+                    response = st.session_state.rag_helper.get_response_with_context(assistant_question_val)
                     st.session_state.assistant_answer = response
                 else:
                     # Use MultiKBRAG generative answer with limited context
@@ -503,8 +510,8 @@ def render_help():
     
     if st.button("Показать подробную справку"):
         with st.spinner("Загружаю справку..."):
-            if st.session_state.rag_helper:
-                help_text = st.session_state.rag_helper.get_response("Как пользоваться личным кабинетом?")
+            if st.session_state.get('rag_helper'):
+                help_text = st.session_state.rag_helper.get_response_with_context("Как пользоваться личным кабинетом?")
                 st.markdown(help_text)
             else:
                 st.error("Система помощи недоступна.")
@@ -793,7 +800,7 @@ def render_staff_view():
             if st.button("🔄 Перезагрузить RAG систему", key="admin_reload_rag"):
                 if _RAG_AVAILABLE:
                     try:
-                        st.session_state.rag_helper = RAGHelper()
+                        st.session_state.rag_helper = MultiKBRAG()
                         st.session_state.rag_initialized = True
                         st.success("RAG система перезагружена")
                     except Exception as e:
