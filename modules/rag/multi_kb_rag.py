@@ -29,13 +29,18 @@ from langchain.schema import StrOutputParser
 from langchain.schema import Document
 
 class MultiKBRAG:
-    def __init__(self, db_path: str = "data/knowledge_bases/kbs.db",
+    def __init__(self, db_path: str = None,
                  chat_provider: Optional[str] = None,
                  chat_model: Optional[str] = None,
                  proxy_base_url: Optional[str] = None,
                  proxy_api_key: Optional[str] = None,
                  temperature: float = 0.2):
-        self.db_path = db_path
+        if db_path is None:
+            # Используем абсолютный путь к общей БД
+            current_dir = Path(__file__).parent
+            self.db_path = current_dir.parent.parent.parent / "satellite_billing.db"
+        else:
+            self.db_path = db_path
         # Embeddings backend: default to multilingual HF model if configured
         embedding_provider = os.getenv("EMBEDDING_PROVIDER", "ollama").lower()
         if embedding_provider in ("hf", "huggingface") and HUGGINGFACE_AVAILABLE:
@@ -82,8 +87,8 @@ class MultiKBRAG:
             self._chat_backend = {'provider': 'openai', 'model': resolved_model, 'temperature': resolved_temperature}
         else:
             resolved_model = chat_model or os.getenv("OLLAMA_CHAT_MODEL", "qwen2.5:latest")
-            self.chat_model = ChatOllama(model=resolved_model, timeout=10, temperature=resolved_temperature)
-            self._chat_backend = {'provider': 'ollama', 'model': resolved_model, 'temperature': resolved_temperature}
+            self.chat_model = ChatOllama(model=resolved_model, timeout=10)
+            self._chat_backend = {'provider': 'ollama', 'model': resolved_model}
         self.vectorstores = {}  # kb_id -> vectorstore
         self.kb_metadata = {}   # kb_id -> metadata
         self.kb_chunks = {}     # kb_id -> List[Document]
@@ -93,6 +98,13 @@ class MultiKBRAG:
             self.load_all_active_kbs()
         except Exception as e:
             print(f"⚠️ Не удалось загрузить базы знаний: {e}")
+
+    def get_chat_backend_info(self) -> Dict:
+        """Возвращает текущую конфигурацию LLM провайдера для RAG."""
+        try:
+            return dict(self._chat_backend)
+        except Exception:
+            return {"provider": "unknown"}
 
     def set_chat_backend(self, provider: str, model: str,
                          base_url: Optional[str] = None,
@@ -119,8 +131,8 @@ class MultiKBRAG:
             )
             self._chat_backend = {'provider': 'openai', 'model': model, 'temperature': temperature}
         else:
-            self.chat_model = ChatOllama(model=model or os.getenv("OLLAMA_CHAT_MODEL", "qwen3:8b"), temperature=temperature)
-            self._chat_backend = {'provider': 'ollama', 'model': model, 'temperature': temperature}
+            self.chat_model = ChatOllama(model=model or os.getenv("OLLAMA_CHAT_MODEL", "qwen3:8b"))
+            self._chat_backend = {'provider': 'ollama', 'model': model}
 
     def _ensure_usage_table(self) -> None:
         """Create llm_usage table if not exists."""
@@ -220,9 +232,18 @@ class MultiKBRAG:
             ''', (kb_id,))
             
             documents = c.fetchall()
+            
+            # Get images for this KB
+            c.execute('''
+                SELECT * FROM knowledge_images 
+                WHERE kb_id = ? AND processed = 1
+                ORDER BY upload_date DESC
+            ''', (kb_id,))
+            
+            images = c.fetchall()
             conn.close()
             
-            if not documents:
+            if not documents and not images:
                 return False
             
             # Process documents into vectorstore
@@ -265,42 +286,49 @@ class MultiKBRAG:
                         except Exception as e:
                             extraction_error = f"json-extract: {e}"
                     else:
-                        # Assume PDF or other text-bearing formats
+                        # Handle common text-bearing formats
                         try:
-                            import PyPDF2
-                            with open(doc_path, 'rb') as file:
-                                pdf_reader = PyPDF2.PdfReader(file)
-                                for page in pdf_reader.pages:
-                                    extracted = page.extract_text() or ""
-                                    content += extracted + "\n"
+                            if suffix in (".txt", ".md"):
+                                with open(doc_path, 'r', encoding='utf-8', errors='ignore') as f:
+                                    content = f.read()
+                            elif suffix in (".docx", ".doc"):
+                                try:
+                                    from docx import Document as _DocxDocument
+                                    docx_doc = _DocxDocument(doc_path)
+                                    parts = []
+                                    for paragraph in docx_doc.paragraphs:
+                                        if paragraph.text and paragraph.text.strip():
+                                            parts.append(paragraph.text.strip())
+                                    for table in docx_doc.tables:
+                                        for row in table.rows:
+                                            row_text = []
+                                            for cell in row.cells:
+                                                if cell.text and cell.text.strip():
+                                                    row_text.append(cell.text.strip())
+                                            if row_text:
+                                                parts.append(" | ".join(row_text))
+                                    content = "\n".join(parts)
+                                except Exception as _docx_err:
+                                    extraction_error = f"docx-extract: {_docx_err}"
+                            else:
+                                # Assume PDF or other binary with text
+                                import PyPDF2
+                                with open(doc_path, 'rb') as file:
+                                    pdf_reader = PyPDF2.PdfReader(file)
+                                    for page in pdf_reader.pages:
+                                        extracted = page.extract_text() or ""
+                                        content += extracted + "\n"
                         except Exception as e:
                             extraction_error = str(e)
 
-                        # Fallback: PyMuPDF (fitz) if content is still too small
-                        if len(content.strip()) < 50:
+                        # Fallbacks for PDFs when text is too small
+                        if suffix == ".pdf" and len(content.strip()) < 50:
                             try:
                                 import fitz  # PyMuPDF
                                 with fitz.open(doc_path) as pdf_doc:
                                     content = "\n".join([page.get_text() or "" for page in pdf_doc])
                             except Exception as e:
-                                # keep previous error if any
                                 extraction_error = extraction_error or str(e)
-                        
-                        # Fallback: OCR for scanned documents if content is still too small
-                        if len(content.strip()) < 50:
-                            try:
-                                from modules.documents.ocr_processor import OCRProcessor
-                                ocr_processor = OCRProcessor()
-                                ocr_result = ocr_processor.process_document(doc_path)
-                                if ocr_result['success'] and ocr_result['text_content']:
-                                    content = ocr_result['text_content']
-                                    extraction_error = None  # Clear error if OCR succeeded
-                                    print(f"✅ OCR успешно извлек текст из {Path(doc_path).name}")
-                                else:
-                                    extraction_error = extraction_error or "OCR не смог извлечь текст"
-                            except Exception as e:
-                                # keep previous error if any
-                                extraction_error = extraction_error or f"OCR error: {str(e)}"
 
                     # If still empty, create minimal placeholder
                     if not content.strip():
@@ -322,10 +350,44 @@ class MultiKBRAG:
                         metadata=doc_metadata
                     ))
             
+            # Process images into documents
+            for image in images:
+                image_id = image[0]
+                doc_id = image[2]  # doc_id column
+                image_path = image[3]  # image_path column
+                image_name = image[4]  # image_name column
+                image_description = image[5]  # image_description column
+                llava_analysis = image[7]  # llava_analysis column
+                
+                # Создаем контент для изображения
+                image_content = f"Изображение: {image_name}\n"
+                if image_description:
+                    image_content += f"Описание: {image_description}\n"
+                if llava_analysis:
+                    image_content += f"Анализ LLaVA: {llava_analysis}\n"
+                
+                # Создаем документ для изображения
+                image_doc = Document(
+                    page_content=image_content,
+                    metadata={
+                        'kb_id': kb_id,
+                        'image_id': image_id,
+                        'doc_id': doc_id,
+                        'title': f"Изображение: {image_name}",
+                        'source': image_path,
+                        'category': kb_info[3],
+                        'content_type': 'image',
+                        'image_name': image_name,
+                        'image_description': image_description,
+                        'llava_analysis': llava_analysis
+                    }
+                )
+                documents_list.append(image_doc)
+            
             if not documents_list:
                 # Should not happen, but guard: create one placeholder to allow KB to load
                 documents_list.append(Document(
-                    page_content=f"База знаний {kb_info[1]} не содержит доступных документов.",
+                    page_content=f"База знаний {kb_info[1]} не содержит доступных документов или изображений.",
                     metadata={
                         'kb_id': kb_id,
                         'doc_id': -1,
@@ -335,16 +397,38 @@ class MultiKBRAG:
                     }
                 ))
             
-            # Create text splitter
-            text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=1000,
-                chunk_overlap=200,
-                length_function=len,
-                separators=["\n\n", "\n", ".", "!", "?", ",", " ", ""]
-            )
-            
-            # Split documents
-            chunks = text_splitter.split_documents(documents_list)
+            # Adaptive chunking per document
+            def _pick_splitter_for(text: str) -> RecursiveCharacterTextSplitter:
+                t = (text or "").lower()
+                # Heuristic: Q/A style if many question marks and bullets
+                qa_like = (t.count('?') >= 3 and ('•' in text or '- ' in text)) or ('вопрос' in t and 'ответ' in t) or ('question' in t and 'answer' in t)
+                # Heuristic: code-like if fenced blocks or many braces/semicolons/indentation
+                code_like = ('```' in text) or (t.count('{') + t.count('}') > 10) or (t.count(';') > 20)
+                if qa_like:
+                    return RecursiveCharacterTextSplitter(
+                        chunk_size=800,
+                        chunk_overlap=120,
+                        length_function=len,
+                        separators=["\n\n", "\n", "? ", "?\n", "• ", "- ", ". ", " ", ""]
+                    )
+                if code_like:
+                    return RecursiveCharacterTextSplitter(
+                        chunk_size=600,
+                        chunk_overlap=80,
+                        length_function=len,
+                        separators=["\n\n", "\n", "; ", ";\n", ") ", ": ", ". ", " ", ""]
+                    )
+                return RecursiveCharacterTextSplitter(
+                    chunk_size=1000,
+                    chunk_overlap=200,
+                    length_function=len,
+                    separators=["\n\n", "\n", ".", "!", "?", ",", " ", ""]
+                )
+
+            chunks = []
+            for d in documents_list:
+                splitter = _pick_splitter_for(d.page_content)
+                chunks.extend(splitter.split_documents([d]))
             
             # Create vectorstore
             vectorstore = FAISS.from_documents(chunks, self.embeddings)
@@ -515,38 +599,26 @@ class MultiKBRAG:
             # Format context
             context = self._format_documents(relevant_docs)
             
-            # Create prompt (unified for all providers)
-            default_rag_prompt = (
-                "Вопрос: {question}\n\n"
-                "Контекст из базы знаний:\n{context}\n\n"
-                "КРИТИЧЕСКИ ВАЖНО:\n"
-                "- ВСЕГДА внимательно анализируй предоставленный контекст\n"
-                "- Если информация есть в контексте — ОБЯЗАТЕЛЬНО используй её в ответе\n"
-                "- НИКОГДА не отвечай \"не найдено релевантной информации\", если в контексте есть косвенно релевантные данные\n"
-                "- Если есть пункты/разделы с подходящей информацией — явно ссылайся на них по смыслу\n"
-                "- Если информации недостаточно — напиши: \"Недостаточно данных в БЗ для точного ответа\"\n\n"
-                "Правила ответа:\n"
-                "1. Отвечай ТОЛЬКО на русском языке\n"
-                "2. Будь конкретным и кратким (2–6 предложений)\n"
-                "3. Используй только факты из контекста, без выдумки\n"
-                "4. Для биллинга учитывай термины: абонентская плата, включенный трафик, финансовый период, активный/неактивный день\n"
-                "5. Для вопросов о деактивации используй положения о деактивации/активации\n\n"
-                "Структура ответа:\n"
-                "- Краткий однозначный вывод\n"
-                "- Ключевые условия/ограничения (по пунктам, если нужно)\n"
-                "- [LEGACY] добавляй только если контекст относится к старой системе\n\n"
-                "Ответ:"
-            )
-            # Try to load external prompt override
-            try:
-                prompt_path = Path("resources/prompts/rag_prompt.txt")
-                if prompt_path.exists():
-                    with open(prompt_path, "r", encoding="utf-8") as f:
-                        default_rag_prompt = f.read()
-            except Exception:
-                pass
+            # Create prompt
+            template = """
+Ты — ассистент биллинга. Отвечай строго ПО КОНТЕКСТУ из базы знаний.
 
-            prompt = ChatPromptTemplate.from_template(default_rag_prompt)
+КОНТЕКСТ:
+{context}
+
+ВОПРОС: {question}
+
+ПРАВИЛА ОТВЕТА (ОБЯЗАТЕЛЬНЫ):
+1) ТОЛЬКО на русском языке.
+2) Используй ТОЛЬКО сведения из контекста: формулировки, пункты, правила.
+3) Если в контексте НЕТ достаточной информации, ответь: "Недостаточно данных в БЗ для точного ответа".
+4) Для расчётных вопросов дай краткую формулу/шаги строго по тексту БЗ (например: "включённый трафик уменьшается пропорционально доле активных дней месяца", укажи как считать долю).
+5) Не придумывай факты вне контекста. Не добавляй общих рекомендаций.
+
+ОТВЕТ (кратко, по делу):
+"""
+
+            prompt = ChatPromptTemplate.from_template(template)
             # Keep model output as AIMessage to access usage metadata when available
             chain = prompt | self.chat_model
             
@@ -565,7 +637,10 @@ class MultiKBRAG:
             if usage is None:
                 # Some integrations place usage under response_metadata
                 metadata = getattr(model_output, 'response_metadata', {}) or {}
-                usage = metadata.get('token_usage') or metadata.get('usage')
+                try:
+                    usage = (metadata or {}).get('token_usage') or (metadata or {}).get('usage')
+                except Exception:
+                    usage = None
             
             # Log usage if any
             try:
@@ -595,11 +670,12 @@ class MultiKBRAG:
             context = self._format_documents(relevant_docs)
             sources = []
             for doc in relevant_docs:
+                _meta = doc.metadata if isinstance(doc.metadata, dict) else {}
                 sources.append({
                     "preview": doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content,
-                    "kb_name": doc.metadata.get('kb_name', 'Unknown'),
-                    "kb_category": doc.metadata.get('kb_category', 'Unknown'),
-                    "title": doc.metadata.get('title', '')
+                    "kb_name": _meta.get('kb_name', 'Unknown'),
+                    "kb_category": _meta.get('kb_category', 'Unknown'),
+                    "title": _meta.get('title', '')
                 })
             return {"context": context, "sources": sources, "docs": relevant_docs}
         except Exception:
@@ -609,9 +685,10 @@ class MultiKBRAG:
         """Format documents for context"""
         formatted = []
         for i, doc in enumerate(docs, 1):
-            kb_name = doc.metadata.get('kb_name', 'Неизвестная БЗ')
-            title = doc.metadata.get('title', 'Без названия')
-            search_type = doc.metadata.get('search_type', 'vector_search')
+            _meta = doc.metadata if isinstance(doc.metadata, dict) else {}
+            kb_name = _meta.get('kb_name', 'Неизвестная БЗ')
+            title = _meta.get('title', 'Без названия')
+            search_type = _meta.get('search_type', 'vector_search')
             
             # Show more content for better context
             content = doc.page_content[:800] if len(doc.page_content) > 800 else doc.page_content
@@ -705,7 +782,7 @@ class MultiKBRAG:
         except Exception as e:
             return [{"error": str(e)}]
     
-    def ask_question(self, question: str, kb_names: Optional[List[str]] = None, context_limit: int = 5) -> Dict:
+    def ask_question(self, question: str, kb_names: Optional[List[str]] = None, context_limit: int = 3) -> Dict:
         """Ask a question using RAG - API wrapper"""
         try:
             # Convert kb_names to kb_ids if provided
@@ -721,18 +798,19 @@ class MultiKBRAG:
             # Get response with context
             answer = self.get_response_with_context(question, kb_ids, context_limit=context_limit)
             
-            # Get sources (use same kb_ids as for response)
+            # Get sources
             relevant_docs = self.search_across_kbs(question, kb_ids, k=context_limit)
             sources = []
             kb_used = set()
             
             for doc in relevant_docs:
+                _meta = doc.metadata if isinstance(doc.metadata, dict) else {}
                 sources.append({
                     "content": doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content,
-                    "kb_name": doc.metadata.get('kb_name', 'Unknown'),
-                    "kb_category": doc.metadata.get('kb_category', 'Unknown')
+                    "kb_name": _meta.get('kb_name', 'Unknown'),
+                    "kb_category": _meta.get('kb_category', 'Unknown')
                 })
-                kb_used.add(doc.metadata.get('kb_name', 'Unknown'))
+                kb_used.add(_meta.get('kb_name', 'Unknown'))
             
             return {
                 "answer": answer,
@@ -744,4 +822,76 @@ class MultiKBRAG:
                 "answer": f"Ошибка при обработке вопроса: {str(e)}",
                 "sources": [],
                 "kb_used": []
+            }
+    
+    def get_images_from_results(self, docs: List[Document]) -> List[Dict]:
+        """Извлечь изображения из результатов поиска"""
+        images = []
+        for doc in docs:
+            _meta = doc.metadata if isinstance(doc.metadata, dict) else {}
+            if _meta.get('content_type') == 'image':
+                images.append({
+                    'image_path': _meta.get('source'),
+                    'image_name': _meta.get('image_name'),
+                    'image_description': _meta.get('image_description'),
+                    'llava_analysis': _meta.get('llava_analysis'),
+                    'kb_name': _meta.get('kb_name'),
+                    'kb_category': _meta.get('kb_category'),
+                    'content': doc.page_content
+                })
+        return images
+    
+    def search_with_images(self, query: str, kb_names: Optional[List[str]] = None, 
+                          k: int = 5) -> Dict:
+        """Поиск с возвратом изображений"""
+        try:
+            # Выполняем обычный поиск
+            docs = self.search_across_kbs(query, kb_names, k=k)
+            
+            # Разделяем на текстовые документы и изображения
+            text_docs = [doc for doc in docs if (doc.metadata if isinstance(doc.metadata, dict) else {}).get('content_type') != 'image']
+            image_docs = [doc for doc in docs if (doc.metadata if isinstance(doc.metadata, dict) else {}).get('content_type') == 'image']
+            
+            # Формируем результаты
+            results = {
+                'text_results': [],
+                'image_results': [],
+                'total_found': len(docs),
+                'text_count': len(text_docs),
+                'image_count': len(image_docs)
+            }
+            
+            # Обрабатываем текстовые результаты
+            for doc in text_docs:
+                _meta = doc.metadata if isinstance(doc.metadata, dict) else {}
+                results['text_results'].append({
+                    "content": doc.page_content,
+                    "metadata": _meta,
+                    "kb_name": _meta.get('kb_name', 'Unknown'),
+                    "kb_category": _meta.get('kb_category', 'Unknown')
+                })
+            
+            # Обрабатываем изображения
+            for doc in image_docs:
+                _meta = doc.metadata if isinstance(doc.metadata, dict) else {}
+                results['image_results'].append({
+                    "image_path": _meta.get('source'),
+                    "image_name": _meta.get('image_name'),
+                    "image_description": _meta.get('image_description'),
+                    "llava_analysis": _meta.get('llava_analysis'),
+                    "kb_name": _meta.get('kb_name', 'Unknown'),
+                    "kb_category": _meta.get('kb_category', 'Unknown'),
+                    "content": doc.page_content
+                })
+            
+            return results
+            
+        except Exception as e:
+            return {
+                'text_results': [],
+                'image_results': [],
+                'total_found': 0,
+                'text_count': 0,
+                'image_count': 0,
+                'error': str(e)
             }

@@ -28,6 +28,16 @@ def render_user_view():
     """Render the main user interface"""
     st.title("🏠 Личный кабинет СТЭККОМ")
     
+    # Ссылка на документацию
+    st.markdown("""
+    <div style="background-color: #f0f2f6; padding: 10px; border-radius: 5px; margin-bottom: 20px;">
+        <strong>📚 Документация:</strong> 
+        <a href="https://github.com/your-repo/steccom/blob/main/ai_billing/README.md" target="_blank">
+            AI Billing System Documentation
+        </a>
+    </div>
+    """, unsafe_allow_html=True)
+    
     # Личный кабинет: 3 вкладки
     tab_reports, tab_sql, tab_rag = st.tabs(["📊 Стандартные отчеты", "🧮 SQL Assistant", "🤖 RAG Assistant"])
     
@@ -505,8 +515,8 @@ def render_staff_view():
     st.title("🔧 Административная панель СТЭККОМ")
     
     # Navigation tabs
-    tab_logs, tab_models, tab_wiki, tab_legacy, tab_kb_editor, tab_admin = st.tabs([
-        "📜 Логи", "🧪 Модели", "🌐 MediaWiki", "📄 Legacy KB", "🧩 KB Editor", "🔧 Админ-панель"
+    tab_logs, tab_models, tab_legacy, tab_kb_editor, tab_admin = st.tabs([
+        "📜 Логи", "🧪 Модели", "📄 Legacy KB", "🧩 KB Editor", "🔧 Админ-панель"
     ])
 
     # Logs tab
@@ -652,75 +662,6 @@ def render_staff_view():
 
     # (SQL Assistant удалён из админ-вкладок; доступен в личном кабинете)
 
-    # MediaWiki Integration
-    with tab_wiki:
-        st.subheader("MediaWiki Integration")
-        try:
-            from ..integrations import MediaWikiClient, KBToWikiPublisher
-            st.markdown("### Настройки подключения")
-            wiki_url = st.text_input("URL MediaWiki", value="http://localhost:8080/api.php", key="wiki_url_legacy")
-            wiki_username = st.text_input("Имя пользователя", key="wiki_username_legacy")
-            wiki_password = st.text_input("Пароль", type="password", key="wiki_password_legacy")
-            namespace_prefix = st.text_input("Префикс пространства имен", value="СТЭККОМ", key="wiki_namespace_legacy")
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("🔗 Тест подключения", key="wiki_test_legacy"):
-                    if wiki_url and wiki_username and wiki_password:
-                        try:
-                            client = MediaWikiClient(wiki_url, wiki_username, wiki_password)
-                            st.success("✅ Подключение к MediaWiki успешно")
-                        except Exception as e:
-                            st.error(f"❌ Ошибка подключения: {e}")
-                    else:
-                        st.warning("Заполните все поля для тестирования")
-            with col2:
-                if st.button("📚 Публиковать все KB", key="wiki_publish_all_legacy"):
-                    if wiki_url and wiki_username and wiki_password:
-                        try:
-                            client = MediaWikiClient(wiki_url, wiki_username, wiki_password)
-                            publisher = KBToWikiPublisher(client)
-                            with st.spinner("Публикация в MediaWiki..."):
-                                results = publisher.publish_all_kb_files("docs/kb", namespace_prefix)
-                            st.success("Публикация завершена")
-                            for kb_file, file_results in results.items():
-                                with st.expander(f"📄 {kb_file}"):
-                                    for success, message in file_results:
-                                        if success:
-                                            st.success(f"✅ {message}")
-                                        else:
-                                            st.error(f"❌ {message}")
-                        except Exception as e:
-                            st.error(f"Ошибка публикации: {e}")
-                    else:
-                        st.warning("Заполните настройки подключения")
-            st.markdown("### Публикация отдельных файлов")
-            try:
-                import glob
-                kb_files = sorted(glob.glob("docs/kb/*.json"))
-                selected_kb = st.selectbox("Выберите KB файл:", ["—"] + kb_files, key="wiki_kb_select_legacy")
-                if st.button("📤 Публиковать выбранный файл", key="wiki_publish_selected_legacy"):
-                    if selected_kb != "—" and wiki_url and wiki_username and wiki_password:
-                        try:
-                            client = MediaWikiClient(wiki_url, wiki_username, wiki_password)
-                            publisher = KBToWikiPublisher(client)
-                            with st.spinner(f"Публикация {selected_kb}..."):
-                                results = publisher.publish_kb_file(selected_kb, namespace_prefix)
-                            for success, message in results:
-                                if success:
-                                    st.success(f"✅ {message}")
-                                else:
-                                    st.error(f"❌ {message}")
-                        except Exception as e:
-                            st.error(f"Ошибка публикации: {e}")
-                    else:
-                        st.warning("Выберите файл и заполните настройки")
-            except Exception as e:
-                st.error(f"Ошибка выбора файлов: {e}")
-        except ImportError as e:
-            st.error(f"Модуль MediaWiki недоступен: {e}")
-        except Exception as e:
-            st.error(f"Ошибка MediaWiki интеграции: {e}")
-
     # Legacy PDF → KB tab
     with tab_legacy:
         st.subheader("PDF Uploads → KB (Legacy)")
@@ -771,7 +712,7 @@ def render_staff_view():
                         with open(target_json, 'w', encoding='utf-8') as f:
                             _json.dump(payload, f, ensure_ascii=False, indent=2)
                         st.success(f"Создан KB: {target_json}")
-                        st.info("Загрузите KB в Wiki на вкладке ‘🌐 MediaWiki’ при необходимости")
+                        st.info("KB создан успешно")
                 except Exception as e:
                     st.error(f"Ошибка генерации KB: {e}")
         except Exception as e:
@@ -957,84 +898,3 @@ def render_staff_view():
         except Exception as e:
             st.error(f"Ошибка загрузки PDF/создания KB: {e}")
 
-        st.markdown("---")
-        st.subheader("MediaWiki Integration")
-        try:
-            from ..integrations import MediaWikiClient, KBToWikiPublisher
-            
-            # Настройки MediaWiki
-            st.markdown("### Настройки подключения")
-            wiki_url = st.text_input("URL MediaWiki", value="http://localhost:8080/w/api.php", key="wiki_url_admin")
-            wiki_username = st.text_input("Имя пользователя", key="wiki_username_admin")
-            wiki_password = st.text_input("Пароль", type="password", key="wiki_password_admin")
-            namespace_prefix = st.text_input("Префикс пространства имен", value="СТЭККОМ", key="wiki_namespace_admin")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("🔗 Тест подключения", key="wiki_test_admin"):
-                    if wiki_url and wiki_username and wiki_password:
-                        try:
-                            client = MediaWikiClient(wiki_url, wiki_username, wiki_password)
-                            st.success("✅ Подключение к MediaWiki успешно")
-                        except Exception as e:
-                            st.error(f"❌ Ошибка подключения: {e}")
-                    else:
-                        st.warning("Заполните все поля для тестирования")
-            
-            with col2:
-                if st.button("📚 Публиковать все KB", key="wiki_publish_all_admin"):
-                    if wiki_url and wiki_username and wiki_password:
-                        try:
-                            client = MediaWikiClient(wiki_url, wiki_username, wiki_password)
-                            publisher = KBToWikiPublisher(client)
-                            
-                            with st.spinner("Публикация в MediaWiki..."):
-                                results = publisher.publish_all_kb_files("docs/kb", namespace_prefix)
-                                
-                            st.success("Публикация завершена")
-                            
-                            # Показываем результаты
-                            for kb_file, file_results in results.items():
-                                with st.expander(f"📄 {kb_file}"):
-                                    for success, message in file_results:
-                                        if success:
-                                            st.success(f"✅ {message}")
-                                        else:
-                                            st.error(f"❌ {message}")
-                        except Exception as e:
-                            st.error(f"Ошибка публикации: {e}")
-                    else:
-                        st.warning("Заполните настройки подключения")
-            
-            # Публикация отдельных файлов
-            st.markdown("### Публикация отдельных файлов")
-            try:
-                import glob
-                kb_files = sorted(glob.glob("docs/kb/*.json"))
-                selected_kb = st.selectbox("Выберите KB файл:", ["—"] + kb_files, key="wiki_kb_select_admin")
-                
-                if st.button("📤 Публиковать выбранный файл", key="wiki_publish_selected_admin"):
-                    if selected_kb != "—" and wiki_url and wiki_username and wiki_password:
-                        try:
-                            client = MediaWikiClient(wiki_url, wiki_username, wiki_password)
-                            publisher = KBToWikiPublisher(client)
-                            
-                            with st.spinner(f"Публикация {selected_kb}..."):
-                                results = publisher.publish_kb_file(selected_kb, namespace_prefix)
-                            
-                            for success, message in results:
-                                if success:
-                                    st.success(f"✅ {message}")
-                                else:
-                                    st.error(f"❌ {message}")
-                        except Exception as e:
-                            st.error(f"Ошибка публикации: {e}")
-                    else:
-                        st.warning("Выберите файл и заполните настройки")
-            except Exception as e:
-                st.error(f"Ошибка выбора файлов: {e}")
-                
-        except ImportError as e:
-            st.error(f"Модуль MediaWiki недоступен: {e}")
-        except Exception as e:
-            st.error(f"Ошибка MediaWiki интеграции: {e}")

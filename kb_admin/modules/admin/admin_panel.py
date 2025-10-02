@@ -11,8 +11,9 @@ from typing import List, Dict
 import sys
 from pathlib import Path
 
-# Добавляем путь к модулям KB Admin
+# Добавляем путь к модулям KB Admin и корневым модулям
 sys.path.append(str(Path(__file__).parent.parent))
+sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from modules.core.knowledge_manager import KnowledgeBaseManager
 from modules.core.pdf_processor import PDFProcessor

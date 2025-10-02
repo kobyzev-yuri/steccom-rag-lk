@@ -30,6 +30,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Import core modules
 from modules.core import init_db, verify_login
 from modules.ui import render_user_view, render_staff_view
+from modules.ui.prompt_manager import PromptManager
 from modules.rag.multi_kb_rag import MultiKBRAG
 
 # Configure application logging
@@ -134,8 +135,8 @@ def render_staff_view():
     st.title("🔧 Административная панель СТЭККОМ")
     
     # Navigation tabs
-    tab_logs, tab_models, tab_admin = st.tabs([
-        "📜 Логи", "🤖 Модели", "🔧 Админ-панель"
+    tab_logs, tab_models, tab_prompts, tab_admin = st.tabs([
+        "📜 Логи", "🤖 Модели", "📝 Промпты", "🔧 Админ-панель"
     ])
 
     # Logs tab
@@ -203,6 +204,14 @@ def render_staff_view():
                 st.info("База данных с метриками не найдена: data/knowledge_bases/kbs.db")
         except Exception as e:
             st.error(f"Ошибка загрузки метрик: {e}")
+
+    # Prompts management tab
+    with tab_prompts:
+        try:
+            prompt_manager = PromptManager()
+            prompt_manager.render_prompt_editor()
+        except Exception as e:
+            st.error(f"Ошибка загрузки редактора промптов: {e}")
 
     # Admin panel tab
     with tab_admin:

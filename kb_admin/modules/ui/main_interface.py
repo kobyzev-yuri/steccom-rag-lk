@@ -6,15 +6,18 @@ Main Interface for KB Admin
 import streamlit as st
 import os
 import sys
+import json
 from pathlib import Path
 from typing import Dict, Any, List
 
-# Добавляем путь к модулям KB Admin
+# Добавляем путь к модулям KB Admin и корневым модулям
 sys.path.append(str(Path(__file__).parent.parent))
+sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from modules.core.knowledge_manager import KnowledgeBaseManager
 from modules.core.text_analyzer import TextAnalyzer
 from modules.core.chunk_optimizer import ChunkOptimizer
+
 from modules.rag.multi_kb_rag import MultiKBRAG
 from modules.documents.pdf_processor import PDFProcessor
 from modules.testing.kb_test_protocol import KBTestProtocol
@@ -86,6 +89,7 @@ class KBAdminInterface:
                 "📚 Умный библиотекарь",
                 "🔧 Админ-панель (AI Billing)",
                 "📚 Управление KB",
+                "📤 Публикация в Wiki",
                 "🤖 Управление моделями",
                 "⚙️ Настройки"
             ]
@@ -174,6 +178,8 @@ class KBAdminInterface:
             self._render_admin_panel()
         elif page == "📚 Управление KB":
             self._render_kb_management()
+        elif page == "📤 Публикация в Wiki":
+            self._render_mediawiki_publishing()
         # Создание/расширение БЗ теперь входит в поток "Умный библиотекарь"
         elif page == "⚙️ Настройки":
             self._render_settings()
@@ -1842,6 +1848,183 @@ class KBAdminInterface:
     def _render_settings(self):
         """Рендер настроек"""
         render_settings_page()
+    
+    def _render_mediawiki_publishing(self):
+        """Рендер публикации в MediaWiki"""
+        st.header("📤 Публикация в MediaWiki")
+        st.markdown("Публикация баз знаний в MediaWiki для общего доступа.")
+        
+        # Настройки подключения к MediaWiki
+        with st.expander("🔧 Настройки подключения", expanded=True):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                wiki_url = st.text_input(
+                    "URL MediaWiki API",
+                    value="http://localhost:8080/api.php",
+                    help="URL API MediaWiki (например: http://localhost:8080/api.php)"
+                )
+                username = st.text_input(
+                    "Имя пользователя",
+                    value="admin",
+                    help="Имя пользователя для входа в MediaWiki"
+                )
+            
+            with col2:
+                password = st.text_input(
+                    "Пароль",
+                    value="Admin123456789",
+                    type="password",
+                    help="Пароль для входа в MediaWiki"
+                )
+                namespace_prefix = st.text_input(
+                    "Префикс пространства имен",
+                    value="СТЭККОМ",
+                    help="Префикс для страниц в MediaWiki (например: СТЭККОМ)"
+                )
+        
+        # Тест подключения
+        if st.button("🔍 Тестировать подключение"):
+            try:
+                if self.mediawiki_client:
+                    # Обновляем настройки клиента
+                    self.mediawiki_client = MediaWikiClient(
+                        wiki_url=wiki_url,
+                        username=username,
+                        password=password
+                    )
+                    
+                    # Тестируем подключение
+                    success, message = self.mediawiki_client.test_connection()
+                    if success:
+                        st.success(f"✅ Подключение успешно: {message}")
+                    else:
+                        st.error(f"❌ Ошибка подключения: {message}")
+                else:
+                    st.error("MediaWiki клиент не инициализирован")
+            except Exception as e:
+                st.error(f"Ошибка тестирования подключения: {e}")
+        
+        st.markdown("---")
+        
+        # Выбор KB для публикации
+        st.subheader("📚 Выбор баз знаний для публикации")
+        
+        # Получаем список доступных KB
+        try:
+            kb_files = []
+            kb_dir = Path("docs/kb")
+            if kb_dir.exists():
+                kb_files = list(kb_dir.glob("*.json"))
+            
+            if kb_files:
+                # Выбор KB
+                selected_kbs = st.multiselect(
+                    "Выберите базы знаний для публикации:",
+                    [f.name for f in kb_files],
+                    help="Выберите одну или несколько баз знаний"
+                )
+                
+                if selected_kbs:
+                    st.markdown("---")
+                    st.subheader("🚀 Публикация")
+                    
+                    # Кнопка публикации
+                    if st.button("📤 Опубликовать выбранные KB", type="primary"):
+                        try:
+                            from modules.integrations.mediawiki_client import KBToWikiPublisher
+                            
+                            # Создаем клиент и публикатор
+                            client = MediaWikiClient(
+                                wiki_url=wiki_url,
+                                username=username,
+                                password=password
+                            )
+                            publisher = KBToWikiPublisher(client)
+                            
+                            # Прогресс бар
+                            progress_bar = st.progress(0)
+                            status_text = st.empty()
+                            
+                            results = []
+                            total_kbs = len(selected_kbs)
+                            
+                            for i, kb_name in enumerate(selected_kbs):
+                                status_text.text(f"Публикация {kb_name}...")
+                                
+                                kb_path = kb_dir / kb_name
+                                success, message = publisher.publish_kb_file(
+                                    str(kb_path), 
+                                    namespace_prefix
+                                )
+                                
+                                results.append({
+                                    'KB': kb_name,
+                                    'Статус': '✅ Успешно' if success else '❌ Ошибка',
+                                    'Сообщение': message
+                                })
+                                
+                                progress_bar.progress((i + 1) / total_kbs)
+                            
+                            status_text.text("Публикация завершена!")
+                            
+                            # Показываем результаты
+                            st.markdown("### 📊 Результаты публикации")
+                            import pandas as pd
+                            df_results = pd.DataFrame(results)
+                            st.dataframe(df_results, use_container_width=True)
+                            
+                            # Статистика
+                            successful = len([r for r in results if '✅' in r['Статус']])
+                            failed = len([r for r in results if '❌' in r['Статус']])
+                            
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                st.metric("Всего KB", total_kbs)
+                            with col2:
+                                st.metric("Успешно", successful, delta=f"+{successful}")
+                            with col3:
+                                st.metric("Ошибок", failed, delta=f"-{failed}" if failed > 0 else None)
+                            
+                        except Exception as e:
+                            st.error(f"Ошибка публикации: {e}")
+                
+                else:
+                    st.info("Выберите базы знаний для публикации")
+            
+            else:
+                st.warning("Базы знаний не найдены в директории docs/kb/")
+                st.markdown("""
+                **Для публикации необходимо:**
+                1. Создать базы знаний в разделе "📚 Умный библиотекарь"
+                2. Убедиться, что файлы KB сохранены в `docs/kb/`
+                """)
+        
+        except Exception as e:
+            st.error(f"Ошибка получения списка KB: {e}")
+        
+        # Дополнительная информация
+        st.markdown("---")
+        with st.expander("ℹ️ Информация о публикации"):
+            st.markdown("""
+            **Как работает публикация:**
+            
+            1. **Выбор KB** - Выберите базы знаний из доступных файлов
+            2. **Подключение** - Система подключается к MediaWiki API
+            3. **Конвертация** - KB конвертируются в формат MediaWiki
+            4. **Публикация** - Создаются или обновляются страницы в Wiki
+            
+            **Формат публикации:**
+            - Каждая KB становится отдельной страницей
+            - Используется префикс пространства имен
+            - Сохраняется структура и форматирование
+            - Добавляются метаданные и временные метки
+            
+            **Требования:**
+            - MediaWiki должен быть запущен и доступен
+            - У пользователя должны быть права на редактирование
+            - KB файлы должны быть в формате JSON
+            """)
     
     def _render_model_management(self):
         """Рендер страницы управления моделями"""

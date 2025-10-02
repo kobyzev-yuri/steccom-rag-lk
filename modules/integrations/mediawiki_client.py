@@ -58,8 +58,8 @@ class MediaWikiClient:
             
             response = self.session.post(self.wiki_url, data=login_params)
             result = response.json()
-            
-            if result['login']['result'] == 'Success':
+            login_info = result.get('login') or {}
+            if login_info.get('result') == 'Success':
                 # Получение CSRF токена для редактирования
                 csrf_params = {
                     'action': 'query',
@@ -69,10 +69,10 @@ class MediaWikiClient:
                 }
                 
                 response = self.session.get(self.wiki_url, params=csrf_params)
-                self.csrf_token = response.json()['query']['tokens']['csrftoken']
+                self.csrf_token = (response.json().get('query') or {}).get('tokens', {}).get('csrftoken')
                 return True
             else:
-                print(f"Ошибка аутентификации: {result['login']['result']}")
+                print(f"Ошибка аутентификации: {login_info.get('result', 'unknown')}")
                 return False
                 
         except Exception as e:

@@ -27,6 +27,8 @@ logger = logging.getLogger(__name__)
 # Добавляем путь к модулям
 current_dir = Path(__file__).parent
 sys.path.append(str(current_dir))
+# Добавляем путь к корневым модулям
+sys.path.append(str(current_dir.parent))
 
 def main():
     """Главная функция приложения"""

@@ -24,7 +24,8 @@ from datetime import datetime
 # Add project root to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
-
+# Add root modules path
+sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 from modules.rag.multi_kb_rag import MultiKBRAG
 from kb_test_protocol import KBTestProtocol, TestQuestion, ModelResponse, RelevanceAssessment, LEGACY_SBD_TEST_QUESTIONS
 
