@@ -36,9 +36,12 @@ class MultiKBRAG:
                  proxy_api_key: Optional[str] = None,
                  temperature: float = 0.2):
         if db_path is None:
-            # Используем абсолютный путь к общей БД
+            # Используем абсолютный путь к БД баз знаний
             current_dir = Path(__file__).parent
-            self.db_path = current_dir.parent.parent.parent / "satellite_billing.db"
+            # Идем на 2 уровня вверх: modules/rag -> modules -> steccom
+            self.db_path = current_dir.parent.parent / "data" / "knowledge_bases" / "kbs.db"
+            # Преобразуем в абсолютный путь
+            self.db_path = self.db_path.resolve()
         else:
             self.db_path = db_path
         # Embeddings backend: default to multilingual HF model if configured

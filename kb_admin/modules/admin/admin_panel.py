@@ -17,6 +17,12 @@ sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from modules.core.knowledge_manager import KnowledgeBaseManager
 from modules.core.pdf_processor import PDFProcessor
+
+# Импорты из корневых модулей
+import os
+root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+sys.path.insert(0, root_path)
+
 from modules.rag.multi_kb_rag import MultiKBRAG
 from modules.admin.simple_kb_assistant import SimpleKBAssistant
 from modules.admin.kb_workflow import KBWorkflow

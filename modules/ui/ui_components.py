@@ -32,7 +32,7 @@ def render_user_view():
     st.markdown("""
     <div style="background-color: #f0f2f6; padding: 10px; border-radius: 5px; margin-bottom: 20px;">
         <strong>📚 Документация:</strong> 
-        <a href="https://github.com/your-repo/steccom/blob/main/ai_billing/README.md" target="_blank">
+        <a href="https://github.com/kobyzev-yuri/steccom-rag-lk/blob/main/ai_billing/README.md" target="_blank">
             AI Billing System Documentation
         </a>
     </div>

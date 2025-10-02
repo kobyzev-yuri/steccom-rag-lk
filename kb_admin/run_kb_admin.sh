@@ -18,8 +18,8 @@ fi
 echo "🔧 Активация виртуального окружения..."
 source .venv/bin/activate
 
-# Переходим в директорию kb_admin
-cd kb_admin
+# Устанавливаем PYTHONPATH для доступа к корневым модулям
+export PYTHONPATH=".:$PYTHONPATH"
 
 echo "🚀 Запуск Streamlit приложения..."
-streamlit run app.py --server.port 8502 --server.address 0.0.0.0
+streamlit run kb_admin/app.py --server.port 8502 --server.address 0.0.0.0
