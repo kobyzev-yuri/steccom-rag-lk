@@ -46,8 +46,8 @@ def main():
     # Test 3: Login and get token
     print("\n3. Testing login and token generation...")
     login_data = {
-        "username": "admin",
-        "password": "admin123"
+        "username": "staff1",
+        "password": "staff123"
     }
     result = test_endpoint("/auth/login", "POST", login_data)
     print(f"   Result: {json.dumps(result, indent=2, ensure_ascii=False)}")

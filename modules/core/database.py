@@ -308,6 +308,18 @@ def verify_login(username: str, password: str) -> Tuple[bool, Optional[str], Opt
         conn.close()
 
 
+def get_user_company(username: str) -> Optional[str]:
+    """Get user company by username"""
+    conn = sqlite3.connect('satellite_billing.db')
+    c = conn.cursor()
+    try:
+        c.execute("SELECT company FROM users WHERE username = ?", (username,))
+        result = c.fetchone()
+        return result[0] if result else None
+    finally:
+        conn.close()
+
+
 def execute_standard_query(query_name: str, company: str, user_role: str = 'user') -> Tuple[pd.DataFrame, Optional[str]]:
     """Execute a standard query and return results"""
     from .queries import STANDARD_QUERIES
