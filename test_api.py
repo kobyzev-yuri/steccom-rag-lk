@@ -10,15 +10,15 @@ from typing import Dict, Any
 
 API_BASE_URL = "http://localhost:8000"
 
-def test_endpoint(endpoint: str, method: str = "GET", data: Dict[Any, Any] = None) -> Dict[Any, Any]:
+def test_endpoint(endpoint: str, method: str = "GET", data: Dict[Any, Any] = None, headers: Dict[str, str] = None) -> Dict[Any, Any]:
     """Test an API endpoint"""
     url = f"{API_BASE_URL}{endpoint}"
     
     try:
         if method == "GET":
-            response = requests.get(url)
+            response = requests.get(url, headers=headers)
         elif method == "POST":
-            response = requests.post(url, json=data)
+            response = requests.post(url, json=data, headers=headers)
         else:
             raise ValueError(f"Unsupported method: {method}")
         
@@ -30,8 +30,8 @@ def test_endpoint(endpoint: str, method: str = "GET", data: Dict[Any, Any] = Non
 
 def main():
     """Main test function"""
-    print("🧪 Testing STECCOM API")
-    print("="*50)
+    print("🧪 Testing STECCOM API with Token Authentication")
+    print("="*60)
     
     # Test 1: Health check
     print("\n1. Testing health check...")
@@ -43,16 +43,8 @@ def main():
     result = test_endpoint("/")
     print(f"   Result: {json.dumps(result, indent=2, ensure_ascii=False)}")
     
-    # Test 3: Database schema
-    print("\n3. Testing database schema...")
-    result = test_endpoint("/database/schema")
-    if "error" not in result:
-        print(f"   Schema retrieved successfully (length: {len(result.get('schema', ''))})")
-    else:
-        print(f"   Error: {result['error']}")
-    
-    # Test 4: Login
-    print("\n4. Testing login...")
+    # Test 3: Login and get token
+    print("\n3. Testing login and token generation...")
     login_data = {
         "username": "admin",
         "password": "admin123"
@@ -60,65 +52,84 @@ def main():
     result = test_endpoint("/auth/login", "POST", login_data)
     print(f"   Result: {json.dumps(result, indent=2, ensure_ascii=False)}")
     
-    # Test 5: SQL generation
-    print("\n5. Testing SQL generation...")
-    sql_data = {
-        "question": "Покажи все устройства",
-        "username": "admin"
-    }
-    result = test_endpoint("/sql/generate", "POST", sql_data)
-    print(f"   Result: {json.dumps(result, indent=2, ensure_ascii=False)}")
+    # Extract token for authenticated requests
+    token = None
+    if "error" not in result and result.get("success"):
+        token = result.get("token")
+        print(f"   ✅ Token received: {token[:20]}...")
+        
+        # Set up headers for authenticated requests
+        auth_headers = {"Authorization": f"Bearer {token}"}
+    else:
+        print("   ❌ Login failed, skipping authenticated tests")
+        auth_headers = None
     
-    # Test 6: RAG query
-    print("\n6. Testing RAG query...")
-    rag_data = {
-        "question": "Как работает система биллинга?",
-        "role": "user"
-    }
-    result = test_endpoint("/rag/query", "POST", rag_data)
-    print(f"   Result: {json.dumps(result, indent=2, ensure_ascii=False)}")
+    # Test 4: Token info
+    if token:
+        print("\n4. Testing token info...")
+        result = test_endpoint("/auth/token-info", "GET", headers=auth_headers)
+        print(f"   Result: {json.dumps(result, indent=2, ensure_ascii=False)}")
     
-    # Test 7: Knowledge bases list
-    print("\n7. Testing knowledge bases list...")
-    result = test_endpoint("/rag/knowledge-bases")
-    print(f"   Result: {json.dumps(result, indent=2, ensure_ascii=False)}")
+    # Test 5: Current user info
+    if token:
+        print("\n5. Testing current user info...")
+        result = test_endpoint("/users/me", "GET", headers=auth_headers)
+        print(f"   Result: {json.dumps(result, indent=2, ensure_ascii=False)}")
     
-    # Test 8: Standard reports list
-    print("\n8. Testing standard reports list...")
-    result = test_endpoint("/reports/standard")
-    print(f"   Result: {json.dumps(result, indent=2, ensure_ascii=False)}")
-    
-    # Test 9: Execute standard report
-    print("\n9. Testing standard report execution...")
-    result = test_endpoint("/reports/standard/My%20monthly%20traffic", "GET")
-    print(f"   Result: {json.dumps(result, indent=2, ensure_ascii=False)}")
-    
-    # Test 10: CSV export
-    print("\n10. Testing CSV export...")
-    result = test_endpoint("/export/csv?sql_query=SELECT%20*%20FROM%20users%20LIMIT%205&filename=test.csv", "GET")
+    # Test 6: Database schema (no auth required)
+    print("\n6. Testing database schema...")
+    result = test_endpoint("/database/schema")
     if "error" not in result:
-        print(f"   CSV export successful (length: {len(str(result))})")
+        print(f"   Schema retrieved successfully (length: {len(result.get('schema', ''))})")
     else:
         print(f"   Error: {result['error']}")
     
-    # Test 11: Chart creation
-    print("\n11. Testing chart creation...")
-    chart_data = [
-        {"month": "2025-01", "usage": 100},
-        {"month": "2025-02", "usage": 150},
-        {"month": "2025-03", "usage": 200}
-    ]
-    result = test_endpoint("/charts/create", "POST", {
-        "data": chart_data,
-        "chart_type": "line",
-        "title": "Test Chart"
-    })
+    # Test 7: SQL generation (requires auth)
+    if token:
+        print("\n7. Testing SQL generation...")
+        sql_data = {
+            "question": "Покажи все устройства"
+        }
+        result = test_endpoint("/sql/generate", "POST", sql_data, auth_headers)
+        print(f"   Result: {json.dumps(result, indent=2, ensure_ascii=False)}")
+    
+    # Test 8: RAG query (requires auth)
+    if token:
+        print("\n8. Testing RAG query...")
+        rag_data = {
+            "question": "Как работает система биллинга?",
+            "role": "user"
+        }
+        result = test_endpoint("/rag/query", "POST", rag_data, auth_headers)
+        print(f"   Result: {json.dumps(result, indent=2, ensure_ascii=False)}")
+    
+    # Test 9: Knowledge bases list (no auth required)
+    print("\n9. Testing knowledge bases list...")
+    result = test_endpoint("/rag/knowledge-bases")
     print(f"   Result: {json.dumps(result, indent=2, ensure_ascii=False)}")
     
-    # Test 12: Session state
-    print("\n12. Testing session state...")
-    result = test_endpoint("/session/state", "GET")
+    # Test 10: Standard reports list (no auth required)
+    print("\n10. Testing standard reports list...")
+    result = test_endpoint("/reports/standard")
     print(f"   Result: {json.dumps(result, indent=2, ensure_ascii=False)}")
+    
+    # Test 11: Execute standard report (requires auth)
+    if token:
+        print("\n11. Testing standard report execution...")
+        result = test_endpoint("/reports/standard/My%20monthly%20traffic", "GET", headers=auth_headers)
+        print(f"   Result: {json.dumps(result, indent=2, ensure_ascii=False)}")
+    
+    # Test 12: Session state (requires auth)
+    if token:
+        print("\n12. Testing session state...")
+        result = test_endpoint("/session/state", "GET", headers=auth_headers)
+        print(f"   Result: {json.dumps(result, indent=2, ensure_ascii=False)}")
+    
+    # Test 13: Logout (requires auth)
+    if token:
+        print("\n13. Testing logout...")
+        result = test_endpoint("/auth/logout", "POST", headers=auth_headers)
+        print(f"   Result: {json.dumps(result, indent=2, ensure_ascii=False)}")
     
     print("\n✅ API testing completed!")
 

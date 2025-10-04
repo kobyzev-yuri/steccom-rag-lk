@@ -67,8 +67,10 @@ http://localhost:8000
 
 ### 🔐 Аутентификация
 
+API использует **Bearer Token Authentication**. Пользователи должны сначала войти в систему для получения токена, затем включать этот токен в заголовок Authorization для защищенных эндпоинтов.
+
 #### POST /auth/login
-**Описание**: Аутентификация пользователя  
+**Описание**: Аутентификация пользователя и получение токена  
 **Тело запроса**:
 ```json
 {
@@ -80,13 +82,58 @@ http://localhost:8000
 ```json
 {
   "success": true,
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "user": {
     "username": "admin",
     "company": "СТЭККОМ",
     "role": "staff"
-  }
+  },
+  "expires_at": "2025-01-15T10:30:00"
 }
 ```
+
+#### POST /auth/logout
+**Описание**: Выход из системы и отзыв токена  
+**Заголовки**: `Authorization: Bearer <token>`  
+**Ответ**:
+```json
+{
+  "success": true,
+  "message": "Logged out successfully"
+}
+```
+
+#### GET /auth/token-info
+**Описание**: Получение информации о текущем токене  
+**Заголовки**: `Authorization: Bearer <token>`  
+**Ответ**:
+```json
+{
+  "username": "admin",
+  "role": "staff",
+  "company": "СТЭККОМ",
+  "expires_at": "2025-01-15T10:30:00",
+  "created_at": "2025-01-14T10:30:00"
+}
+```
+
+#### GET /users/me
+**Описание**: Получение информации о текущем пользователе  
+**Заголовки**: `Authorization: Bearer <token>`  
+**Ответ**:
+```json
+{
+  "success": true,
+  "username": "admin",
+  "company": "СТЭККОМ",
+  "role": "staff"
+}
+```
+
+**Управление токенами:**
+- **Срок действия**: 24 часа
+- **Хранение**: В памяти (используйте Redis/базу данных в продакшене)
+- **Отзыв**: Доступен через эндпоинт logout
 
 ### 🗄️ База данных
 
@@ -102,12 +149,12 @@ http://localhost:8000
 
 #### POST /sql/generate
 **Описание**: Генерация SQL запроса из естественного языка  
+**Заголовки**: `Authorization: Bearer <token>`  
 **Тело запроса**:
 ```json
 {
   "question": "Покажи все устройства",
-  "company": "СТЭККОМ",
-  "username": "admin"
+  "company": "СТЭККОМ"
 }
 ```
 **Ответ**:
@@ -122,9 +169,9 @@ http://localhost:8000
 
 #### POST /sql/execute
 **Описание**: Выполнение SQL запроса  
+**Заголовки**: `Authorization: Bearer <token>`  
 **Параметры**:
 - `sql_query` (query): SQL запрос
-- `username` (query): Имя пользователя
 
 **Ответ**:
 ```json
@@ -147,6 +194,7 @@ http://localhost:8000
 
 #### POST /rag/query
 **Описание**: Запрос к RAG системе  
+**Заголовки**: `Authorization: Bearer <token>`  
 **Тело запроса**:
 ```json
 {

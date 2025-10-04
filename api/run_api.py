@@ -7,17 +7,20 @@ FastAPI-based REST API for database operations and RAG functionality
 import os
 import sys
 import logging
+import secrets
+import hashlib
 from pathlib import Path
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi import FastAPI, HTTPException, Depends, Query, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 import uvicorn
 import pandas as pd
@@ -70,15 +73,62 @@ except Exception as e:
     RAG_AVAILABLE = False
     logger.warning(f"RAG Helper not available: {e}")
 
+# Token management
+security = HTTPBearer()
+active_tokens = {}  # In production, use Redis or database
+
+def generate_token(username: str, role: str, company: str) -> str:
+    """Generate a secure token for user"""
+    token = secrets.token_urlsafe(32)
+    expires_at = datetime.now() + timedelta(hours=24)  # 24 hour expiry
+    
+    active_tokens[token] = {
+        "username": username,
+        "role": role,
+        "company": company,
+        "expires_at": expires_at,
+        "created_at": datetime.now()
+    }
+    
+    logger.info(f"Generated token for user: {username}")
+    return token
+
+def verify_token(token: str) -> Dict[str, Any]:
+    """Verify token and return user info"""
+    if token not in active_tokens:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    token_info = active_tokens[token]
+    
+    # Check if token expired
+    if datetime.now() > token_info["expires_at"]:
+        del active_tokens[token]
+        raise HTTPException(status_code=401, detail="Token expired")
+    
+    return token_info
+
+def revoke_token(token: str) -> bool:
+    """Revoke a token"""
+    if token in active_tokens:
+        del active_tokens[token]
+        logger.info(f"Token revoked: {token[:8]}...")
+        return True
+    return False
+
 # Pydantic models
 class LoginRequest(BaseModel):
     username: str
     password: str
 
+class LoginResponse(BaseModel):
+    success: bool
+    token: Optional[str] = None
+    user: Optional[Dict[str, str]] = None
+    expires_at: Optional[str] = None
+
 class SQLQueryRequest(BaseModel):
     question: str
     company: Optional[str] = None
-    username: Optional[str] = None
 
 class RAGQueryRequest(BaseModel):
     question: str
@@ -91,12 +141,22 @@ class QueryResponse(BaseModel):
     error: Optional[str] = None
     sql_query: Optional[str] = None
 
+class TokenInfo(BaseModel):
+    username: str
+    role: str
+    company: str
+    expires_at: str
+    created_at: str
+
 # Authentication dependency
-async def get_current_user(username: str = Query(...)):
-    """Simple authentication check"""
-    if not username:
-        raise HTTPException(status_code=401, detail="Username required")
-    return username
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Token-based authentication"""
+    try:
+        token = credentials.credentials
+        user_info = verify_token(token)
+        return user_info
+    except Exception as e:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 # API Endpoints
 
@@ -120,24 +180,67 @@ async def health_check():
         "timestamp": datetime.now().isoformat()
     }
 
-@app.post("/auth/login")
+@app.post("/auth/login", response_model=LoginResponse)
 async def login(request: LoginRequest):
-    """User authentication"""
+    """User authentication with token generation"""
     try:
         user_info = verify_login(request.username, request.password)
         if user_info:
-            return {
-                "success": True,
-                "user": {
-                    "username": user_info[0],
-                    "company": user_info[1],
-                    "role": user_info[2]
-                }
-            }
-        else:
-            raise HTTPException(status_code=401, detail="Invalid credentials")
+            success, role, company = user_info
+            if success:
+                # Generate token
+                token = generate_token(request.username, role, company)
+                token_info = active_tokens[token]
+                
+                return LoginResponse(
+                    success=True,
+                    token=token,
+                    user={
+                        "username": request.username,
+                        "company": company,
+                        "role": role
+                    },
+                    expires_at=token_info["expires_at"].isoformat()
+                )
+        
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Login error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/auth/logout")
+async def logout(current_user: dict = Depends(get_current_user)):
+    """Logout and revoke token"""
+    try:
+        # Find and revoke the current token
+        for token, info in active_tokens.items():
+            if info["username"] == current_user["username"]:
+                revoke_token(token)
+                break
+        
+        return {
+            "success": True,
+            "message": "Logged out successfully"
+        }
+    except Exception as e:
+        logger.error(f"Logout error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/auth/token-info", response_model=TokenInfo)
+async def get_token_info(current_user: dict = Depends(get_current_user)):
+    """Get current token information"""
+    try:
+        return TokenInfo(
+            username=current_user["username"],
+            role=current_user["role"],
+            company=current_user["company"],
+            expires_at=current_user["expires_at"].isoformat(),
+            created_at=current_user["created_at"].isoformat()
+        )
+    except Exception as e:
+        logger.error(f"Token info error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/database/schema")
@@ -154,13 +257,14 @@ async def get_schema():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/sql/generate")
-async def generate_sql_query(request: SQLQueryRequest):
+async def generate_sql_query(
+    request: SQLQueryRequest,
+    current_user: dict = Depends(get_current_user)
+):
     """Generate SQL query from natural language"""
     try:
-        # Get company context if username provided
-        company = request.company
-        if request.username and not company:
-            company = get_user_company(request.username)
+        # Use company from token or request
+        company = request.company or current_user["company"]
         
         # Generate SQL
         sql_query = generate_sql(request.question, company)
@@ -178,12 +282,12 @@ async def generate_sql_query(request: SQLQueryRequest):
 @app.post("/sql/execute")
 async def execute_sql_query(
     sql_query: str = Query(...),
-    username: str = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """Execute SQL query"""
     try:
         # Get user company for data filtering
-        company = get_user_company(username)
+        company = current_user["company"]
         
         # Execute query
         df, error = execute_query(sql_query)
@@ -210,17 +314,23 @@ async def execute_sql_query(
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/rag/query")
-async def rag_query(request: RAGQueryRequest):
+async def rag_query(
+    request: RAGQueryRequest,
+    current_user: dict = Depends(get_current_user)
+):
     """Query RAG system"""
     if not RAG_AVAILABLE:
         raise HTTPException(status_code=503, detail="RAG system not available")
     
     try:
+        # Use role from token or request
+        role = request.role or current_user["role"]
+        
         # Use RAG helper to get answer
         result = rag_helper.query(
             request.question,
             kb_id=request.kb_id,
-            role=request.role
+            role=role
         )
         
         return {
@@ -229,7 +339,7 @@ async def rag_query(request: RAGQueryRequest):
             "sources": result.get("sources", []),
             "question": request.question,
             "kb_id": request.kb_id,
-            "role": request.role
+            "role": role
         }
     except Exception as e:
         logger.error(f"RAG query error: {e}")
@@ -253,21 +363,18 @@ async def list_knowledge_bases():
         logger.error(f"KB list error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/users/{username}/company")
-async def get_user_company_info(username: str):
-    """Get user company information"""
+@app.get("/users/me")
+async def get_current_user_info(current_user: dict = Depends(get_current_user)):
+    """Get current user information"""
     try:
-        company = get_user_company(username)
-        if company:
-            return {
-                "success": True,
-                "username": username,
-                "company": company
-            }
-        else:
-            raise HTTPException(status_code=404, detail="User not found")
+        return {
+            "success": True,
+            "username": current_user["username"],
+            "company": current_user["company"],
+            "role": current_user["role"]
+        }
     except Exception as e:
-        logger.error(f"User company error: {e}")
+        logger.error(f"User info error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Error handlers
@@ -287,16 +394,16 @@ async def get_standard_reports():
 @app.get("/reports/standard/{report_type}")
 async def execute_standard_report(
     report_type: str,
-    username: str = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """Execute standard report"""
     try:
         if report_type not in STANDARD_QUERIES:
             raise HTTPException(status_code=404, detail=f"Report type '{report_type}' not found")
         
-        # Get user company and role
-        company = get_user_company(username)
-        role = 'staff'  # TODO: Get actual role from user
+        # Get user company and role from token
+        company = current_user["company"]
+        role = current_user["role"]
         
         # Execute standard query
         df, error = execute_standard_query(report_type, company, role)
@@ -326,7 +433,7 @@ async def execute_standard_report(
 async def export_csv(
     sql_query: str = Query(...),
     filename: str = Query(default="export.csv"),
-    username: str = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """Export data as CSV"""
     try:
@@ -353,7 +460,7 @@ async def create_chart_endpoint(
     data: List[Dict],
     chart_type: str = "line",
     title: str = "Chart",
-    username: str = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """Create chart from data"""
     try:
@@ -382,13 +489,13 @@ async def create_chart_endpoint(
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/session/state")
-async def get_session_state(username: str = Depends(get_current_user)):
+async def get_session_state(current_user: dict = Depends(get_current_user)):
     """Get user session state (placeholder)"""
     try:
         # TODO: Implement actual session state storage (Redis, database, etc.)
         return {
             "success": True,
-            "username": username,
+            "username": current_user["username"],
             "session_data": {
                 "last_query": None,
                 "favorite_reports": [],
@@ -403,16 +510,16 @@ async def get_session_state(username: str = Depends(get_current_user)):
 @app.post("/session/state")
 async def save_session_state(
     session_data: Dict[str, Any],
-    username: str = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """Save user session state (placeholder)"""
     try:
         # TODO: Implement actual session state storage (Redis, database, etc.)
-        logger.info(f"Saving session state for {username}: {session_data}")
+        logger.info(f"Saving session state for {current_user['username']}: {session_data}")
         
         return {
             "success": True,
-            "username": username,
+            "username": current_user["username"],
             "message": "Session state saved (placeholder - implement actual storage)"
         }
     except Exception as e:
