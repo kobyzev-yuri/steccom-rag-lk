@@ -13,7 +13,7 @@ from pathlib import Path
 import pandas as pd
 
 class KnowledgeBaseManager:
-    def __init__(self, db_path: str = "satellite_billing.db"):
+    def __init__(self, db_path: str = "kbs.db"):
         self.db_path = db_path
         self.init_knowledge_tables()
     

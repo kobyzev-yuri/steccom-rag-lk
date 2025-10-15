@@ -1,0 +1,94 @@
+{
+  "kb_info": {
+    "id": 2,
+    "name": "Пользовательские инструкции",
+    "description": "Инструкции для пользователей системы",
+    "category": "Пользовательские инструкции",
+    "created_at": "2025-09-16T23:49:54.359160",
+    "updated_at": "2025-09-16T23:49:54.359160",
+    "created_by": "system"
+  },
+  "documents": [
+    {
+      "id": 32,
+      "title": "Access-SkyEdge-II--170414-FINAL.pdf",
+      "file_path": "/mnt/ai/cnn/steccom-rag-lk/data/uploads/Access-SkyEdge-II--170414-FINAL.pdf",
+      "content_type": "licenses",
+      "file_size": 1461754,
+      "upload_date": "2025-10-09T21:38:46.800894",
+      "processed": 1,
+      "metadata": "{\"ocr_cleaned\": true, \"gemini_analyzed\": false, \"text_length\": 4441, \"summary_length\": 4394, \"content\": \"Benefits\\n\\u2022 High performance service rate up to 30 /4 \\nMbps\\n\\u2022 High availability and efficiency - utilizing  \\nDVB-S2 ACM and ICM adaptive inbound\\n\\u2022 Feature-rich functionality - optimizing \\nperformance of multiple layers with TCP \\nand HTTP acceleration, QoS, VoIP and \\ncompression\\n\\u2022 Field upgradeable with two expansion slots \\n\\u2022  Support for Mesh and NetEdge multi-star \\ntechnology\\nMulti-Purpose Modular VSAT\\nSkyEdge II Access is a modular, two way VSAT enabling broadband \\nIP access, and multicasting to one or many business or rural locations. \\nThis VSAT is ideal for extremely high throughput for rapid access to the \\nWeb, VoIP, enterprise connectivity and multimedia applications. Add \\non Voice ports simplify connection to local phones and an optional \\nMesh card provides efficient single-hop communications.\\nEnhanced Capabilities\\nSkyEdge II Access provides superior bandwidth efficiency and \\nhigh availability through the use of DVB-S2 ACM (Adaptive \\nModulation and Coding) for the outbound path, supporting \\nQPSK/8PSK/16APSK/32APSK Modulation and LDPC coding. \\nThe SkyEdge II Access ICM inbound performance can provide \\nover 6Mb/sec per VSAT, on adaptive and dynamic channels. High \\nbandwidth efficiency is supported with QPSK/8PSK modulation and \\nDVB-RCS based turbo coding. \\nICM technology provides 3 dimensions of inbound adaptivity: Adaptive \\nuplink power control; Adaptive symbol rate, coding and modulation. \\nThese combine to ensure higher availability even in rain fade conditions \\nwith a maximum dynamic range of up to 23dB. Mesh traffic shares the \\nsame inbound bandwidth and all adaptivity features.\\nAbove compliance to the standards, SkyEdge II Access provides \\nembedded IP, IPv6, TCP/HTTP acceleration, routing capabilities, \\nencryption, VLAN, VRF, end-to-end QoS, tiered services and SLA \\nsupport. There is no need for external boxes or installation of software \\non the customer\\u2019s PC.\\nMaximum VSAT Flexibility\\nSkyEdge II Access is modular and enables expansion of VSAT \\ncapabilities as the need arises. A variety of optional plug-in expansion \\ncards such as telephony ports, or Mesh, can be added in the two \\nexpansion slots. There is no need for external boxes and all expansion \\nports can be easily managed, fully controlled and updated over the air, \\nremotely from the NMS.\\nAccess\\nHigh Performance Multi-Purpose VSAT\\n\\nwww.gilat.com | info@gilat.com | Gilat Satellite Networks\\nSKYEDGEII-ACCESS-170414-F\\nAll registered trademarks are the property of their respective companies. This brochure is being provided for informational purposes only. The details contained in this \\ndocument, including product and feature specifications, are subject to change without notice and shall not bind Gilat to a specific product or set of features related thereto. \\nDVB is a registered trademark of the DVB Project.\\nOutbound Carrier\\nStandard\\nDVB-S2 Adaptive Coding and Modulation (ACM)\\nCarrier Rate\\n256Ksps - 45Msps (in 1Ksps steps)\\nCarrier Data Rate\\nUp to 135 Mbps\\nVSAT Data Throughput\\nUp to: 30 Mbps UDP, 30Mbps TCP\\nModulation\\nQPSK, 8PSK, 16APSK, 32ASPK\\nCoding\\nLDPC and BCH (DVB-S2)\\nFEC Rate (DVB-S2)\\n1/4, 1/3, 2/5, 1/2, 3/5, 2/3, 3/4, 4/5, 5/6, 8/9, 9/10\\nInbound Carrier\\nAccess Scheme\\nMF-TDMA DVB-RCS\\nChannel Rates\\n128Ksps-2.56Msps\\nVSAT Data Throughput\\nUp to 4.7 Mbps UDP/TCP \\nModulation\\nQPSK, 8PSK\\nCoding\\nTurbo coding FEC 1/2; 2/3; 3/4; 4/5; 6/7 \\nCoding (RCS Based)\\nTurbo coding FEC 1/2; 2/3; 3/4; 4/5; 6/7\\nMesh Connections\\nUp to 1000, 30 simultaneous sessions \\nInterfaces and Power\\nRF Input/Output\\nTwo F connectors, 75 \\u2126 female\\nData Interface\\n4 x Ethernet 10/100BaseT, RJ-45, Serial console: RJ-45\\nPower Supply Options\\nAutorange 100-240V AC or Autorange 10-59V DC\\nPower Consumption\\n13W for IDU ( Up to 2 Add on cards, additional 10W each)\\nEnhanced Features\\nEnhanced IP Features\\nMulti VRF and VLAN, IPv6 Ready, RIP, VRRP, DHCP, NAT/PAT, IGMP, IP prioritization, ACL, DiffServ\\nOther Features\\nBandwidth on Demand, TCP and HTTP acceleration, Multi-Level QoS and MPN\\nSecurity\\nAES 256 Encryption\\nIndoor Unit Mechanical / Environmental Conditions\\nSize (WxDxH)\\n320x60x280 mm\\nWeight\\n1.74 Kg\\nOperating Temperature\\n0\\u00ba to +50\\u00ba C\\nStorage Temperature\\n-40\\u00ba to +70\\u00ba C\\nRelative Humidity\\nUp to 90%\\nOutdoor Unit\\nAntenna\\nKa, Ku, Ext Ku, C\\nOperating Temperature\\n-40\\u00ba to +60\\u00ba C\\nHumidity\\nUp to 100%\\nLinear BUC interface\\nInternal 24V up to 4W BUC; External DC for 6W BUC and higher; Ka, Ku, Ext Ku, C\\nLNB\\nStandard TVRO type or PLL\\nTechnical Specifications\\n\\n\", \"summary\": \"Benefits \\u2022 High performance service rate up to 30 /4 Mbps \\u2022 High availability and efficiency - utilizing DVB-S2 ACM and ICM adaptive inbound \\u2022 Feature-rich functionality - optimizing performance of multiple layers with TCP and HTTP acceleration, QoS, VoIP and compression \\u2022 Field upgradeable with two expansion slots \\u2022 Support for Mesh and NetEdge multi-star technology Multi-Purpose Modular VSAT SkyEdge II Access is a modular, two way VSAT enabling broadband IP access, and multicasting to one or many business or rural locations. This VSAT is ideal for extremely high throughput for rapid access to the Web, VoIP, enterprise connectivity and multimedia applications. Add on Voice ports simplify connection to local phones and an optional Mesh card provides efficient single-hop communications. Enhanced Capabilities SkyEdge II Access provides superior bandwidth efficiency and high availability through the use of DVB-S2 ACM (Adaptive Modulation and Coding) for the outbound path, supporting QPSK/8PSK/16APSK/32APSK Modulation and LDPC coding. The SkyEdge II Access ICM inbound performance can provide over 6Mb/sec per VSAT, on adaptive and dynamic channels. High bandwidth efficiency is supported with QPSK/8PSK modulation and DVB-RCS based turbo coding. ICM technology provides 3 dimensions of inbound adaptivity: Adaptive uplink power control; Adaptive symbol rate, coding and modulation. These combine to ensure higher availability even in rain fade conditions with a maximum dynamic range of up to 23dB. Mesh traffic shares the same inbound bandwidth and all adaptivity features. Above compliance to the standards, SkyEdge II Access provides embedded IP, IPv6, TCP/HTTP acceleration, routing capabilities, encryption, VLAN, VRF, end-to-end QoS, tiered services and SLA support. There is no need for external boxes or installation of software on the customer\\u2019s PC. Maximum VSAT Flexibility SkyEdge II Access is modular and enables expansion of VSAT capabilities as the need arises. A variety of optional plug-in expansion cards such as telephony ports, or Mesh, can be added in the two expansion slots. There is no need for external boxes and all expansion ports can be easily managed, fully controlled and updated over the air, remotely from the NMS. Access High Performance Multi-Purpose VSAT www.gilat.com | info@gilat.com | Gilat Satellite Networks SKYEDGEII-ACCESS-170414-F All registered trademarks are the property of their respective companies. This brochure is being provided for informational purposes only. The details contained in this document, including product and feature specifications, are subject to change without notice and shall not bind Gilat to a specific product or set of features related thereto. DVB is a registered trademark of the DVB Project. Outbound Carrier Standard DVB-S2 Adaptive Coding and Modulation (ACM) Carrier Rate 256Ksps - 45Msps (in 1Ksps steps) Carrier Data Rate Up to 135 Mbps VSAT Data Throughput Up to: 30 Mbps UDP, 30Mbps TCP Modulation QPSK, 8PSK, 16APSK, 32ASPK Coding LDPC and BCH (DVB-S2) FEC Rate (DVB-S2) 1/4, 1/3, 2/5, 1/2, 3/5, 2/3, 3/4, 4/5, 5/6, 8/9, 9/10 Inbound Carrier Access Scheme MF-TDMA DVB-RCS Channel Rates 128Ksps-2.56Msps VSAT Data Throughput Up to 4.7 Mbps UDP/TCP Modulation QPSK, 8PSK Coding Turbo coding FEC 1/2; 2/3; 3/4; 4/5; 6/7 Coding (RCS Based) Turbo coding FEC 1/2; 2/3; 3/4; 4/5; 6/7 Mesh Connections Up to 1000, 30 simultaneous sessions Interfaces and Power RF Input/Output Two F connectors, 75 \\u2126 female Data Interface 4 x Ethernet 10/100BaseT, RJ-45, Serial console: RJ-45 Power Supply Options Autorange 100-240V AC or Autorange 10-59V DC Power Consumption 13W for IDU ( Up to 2 Add on cards, additional 10W each) Enhanced Features Enhanced IP Features Multi VRF and VLAN, IPv6 Ready, RIP, VRRP, DHCP, NAT/PAT, IGMP, IP prioritization, ACL, DiffServ Other Features Bandwidth on Demand, TCP and HTTP acceleration, Multi-Level QoS and MPN Security AES 256 Encryption Indoor Unit Mechanical / Environmental Conditions Size (WxDxH) 320x60x280 mm Weight 1.74 Kg Operating Temperature 0\\u00ba to +50\\u00ba C Storage Temperature -40\\u00ba to +70\\u00ba C Relative Humidity Up to 90% Outdoor Unit Antenna Ka, Ku, Ext Ku, C Operating Temperature -40\\u00ba to +60\\u00ba C Humidity Up to 100% Linear BUC interface Internal 24V up to 4W BUC; External DC for 6W BUC and higher; Ka, Ku, Ext Ku, C Standard TVRO type or PLL Technical Specifications\", \"processed\": true, \"status\": \"processed\"}"
+    },
+    {
+      "id": 8,
+      "title": "Регламент reg_monitor_16112013",
+      "file_path": "/mnt/ai/cnn/steccom-rag-lk/kb_admin/data/reg_monitor_16112013.pdf",
+      "content_type": "application/pdf",
+      "file_size": 0,
+      "upload_date": "2025-10-07T22:58:51.748237",
+      "processed": 1,
+      "metadata": "{\"doc_id\": 8, \"chunk_index\": 0, \"item_index\": 0, \"title\": \"\\u0420\\u0435\\u0433\\u043b\\u0430\\u043c\\u0435\\u043d\\u0442 reg_monitor_16112013\"}"
+    },
+    {
+      "id": 9,
+      "title": "Руководство по личному кабинету",
+      "file_path": "/mnt/ai/cnn/steccom-rag-lk/kb_admin/data/document_9.pdf",
+      "content_type": "application/pdf",
+      "file_size": 0,
+      "upload_date": "2025-10-07T22:58:51.748237",
+      "processed": 1,
+      "metadata": "{\"doc_id\": 9, \"chunk_index\": 0, \"item_index\": 0, \"title\": \"\\u0420\\u0443\\u043a\\u043e\\u0432\\u043e\\u0434\\u0441\\u0442\\u0432\\u043e \\u043f\\u043e \\u043b\\u0438\\u0447\\u043d\\u043e\\u043c\\u0443 \\u043a\\u0430\\u0431\\u0438\\u043d\\u0435\\u0442\\u0443\"}"
+    },
+    {
+      "id": 10,
+      "title": "Регламент reg_sbd",
+      "file_path": "/mnt/ai/cnn/steccom-rag-lk/kb_admin/data/reg_sbd.pdf",
+      "content_type": "application/pdf",
+      "file_size": 0,
+      "upload_date": "2025-10-07T22:58:51.748237",
+      "processed": 1,
+      "metadata": "{\"doc_id\": 10, \"chunk_index\": 0, \"item_index\": 0, \"title\": \"\\u0420\\u0435\\u0433\\u043b\\u0430\\u043c\\u0435\\u043d\\u0442 reg_sbd\"}"
+    },
+    {
+      "id": 11,
+      "title": "Возможности интерфейса личного кабинета",
+      "file_path": "/mnt/ai/cnn/steccom-rag-lk/kb_admin/data/document_11.pdf",
+      "content_type": "application/pdf",
+      "file_size": 0,
+      "upload_date": "2025-10-07T22:58:51.748237",
+      "processed": 1,
+      "metadata": "{\"doc_id\": 11, \"chunk_index\": 0, \"item_index\": 0, \"title\": \"\\u0412\\u043e\\u0437\\u043c\\u043e\\u0436\\u043d\\u043e\\u0441\\u0442\\u0438 \\u0438\\u043d\\u0442\\u0435\\u0440\\u0444\\u0435\\u0439\\u0441\\u0430 \\u043b\\u0438\\u0447\\u043d\\u043e\\u0433\\u043e \\u043a\\u0430\\u0431\\u0438\\u043d\\u0435\\u0442\\u0430\"}"
+    },
+    {
+      "id": 12,
+      "title": "Примеры запросов",
+      "file_path": "/mnt/ai/cnn/steccom-rag-lk/kb_admin/data/document_12.pdf",
+      "content_type": "application/pdf",
+      "file_size": 0,
+      "upload_date": "2025-10-07T22:58:51.748237",
+      "processed": 1,
+      "metadata": "{\"doc_id\": 12, \"chunk_index\": 0, \"item_index\": 0, \"title\": \"\\u041f\\u0440\\u0438\\u043c\\u0435\\u0440\\u044b \\u0437\\u0430\\u043f\\u0440\\u043e\\u0441\\u043e\\u0432\"}"
+    },
+    {
+      "id": 13,
+      "title": "Регламент reg_sbd_en",
+      "file_path": "/mnt/ai/cnn/steccom-rag-lk/kb_admin/data/reg_sbd_en.pdf",
+      "content_type": "application/pdf",
+      "file_size": 0,
+      "upload_date": "2025-10-07T22:58:51.748237",
+      "processed": 1,
+      "metadata": "{\"doc_id\": 13, \"chunk_index\": 0, \"item_index\": 0, \"title\": \"\\u0420\\u0435\\u0433\\u043b\\u0430\\u043c\\u0435\\u043d\\u0442 reg_sbd_en\"}"
+    },
+    {
+      "id": 14,
+      "title": "Регламент reg_gpstrack_14042014",
+      "file_path": "/mnt/ai/cnn/steccom-rag-lk/kb_admin/data/reg_gpstrack_14042014.pdf",
+      "content_type": "application/pdf",
+      "file_size": 0,
+      "upload_date": "2025-10-07T22:58:51.748237",
+      "processed": 1,
+      "metadata": "{\"doc_id\": 14, \"chunk_index\": 0, \"item_index\": 0, \"title\": \"\\u0420\\u0435\\u0433\\u043b\\u0430\\u043c\\u0435\\u043d\\u0442 reg_gpstrack_14042014\"}"
+    }
+  ],
+  "images": []
+}

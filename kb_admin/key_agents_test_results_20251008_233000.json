@@ -1,0 +1,493 @@
+{
+  "test_date": "2025-10-08T22:36:21.043725",
+  "models_tested": [
+    "qwen2.5-coder:7b",
+    "qwen3:8b",
+    "llama3:8b",
+    "llama3.1:8b"
+  ],
+  "rag_admin_results": {
+    "qwen2.5-coder:7b": {
+      "model": "qwen2.5-coder:7b",
+      "success_rate": 1.0,
+      "avg_time": 123.52748787403107,
+      "total_time": 494.10995149612427,
+      "successful_answers": 4,
+      "total_questions": 4,
+      "results": [
+        {
+          "question": "Что такое SBD пакет в спутниковой связи?",
+          "answer": "Ошибка получения ответа: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=120)",
+          "sources_count": 6,
+          "time": 131.36692881584167,
+          "success": true
+        },
+        {
+          "question": "Как работает VSAT система?",
+          "answer": "Ошибка получения ответа: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=120)",
+          "sources_count": 6,
+          "time": 120.86670756340027,
+          "success": true
+        },
+        {
+          "question": "Какие преимущества у спутниковой связи?",
+          "answer": "Ошибка получения ответа: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=120)",
+          "sources_count": 6,
+          "time": 120.91429448127747,
+          "success": true
+        },
+        {
+          "question": "Объясни протокол передачи данных через спутник",
+          "answer": "Ошибка получения ответа: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=120)",
+          "sources_count": 6,
+          "time": 120.96202063560486,
+          "success": true
+        }
+      ]
+    },
+    "qwen3:8b": {
+      "model": "qwen3:8b",
+      "success_rate": 1.0,
+      "avg_time": 2.796793222427368,
+      "total_time": 11.187172889709473,
+      "successful_answers": 4,
+      "total_questions": 4,
+      "results": [
+        {
+          "question": "Что такое SBD пакет в спутниковой связи?",
+          "answer": "Ошибка получения ответа: HTTPConnectionPool(host='localhost', port=11434): Max retries exceeded with url: /api/chat (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7903fedc66b0>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+          "sources_count": 6,
+          "time": 10.275367259979248,
+          "success": true
+        },
+        {
+          "question": "Как работает VSAT система?",
+          "answer": "Ошибка получения ответа: HTTPConnectionPool(host='localhost', port=11434): Max retries exceeded with url: /api/chat (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7903fedc72e0>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+          "sources_count": 6,
+          "time": 0.3416256904602051,
+          "success": true
+        },
+        {
+          "question": "Какие преимущества у спутниковой связи?",
+          "answer": "Ошибка получения ответа: HTTPConnectionPool(host='localhost', port=11434): Max retries exceeded with url: /api/chat (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7903fedc75b0>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+          "sources_count": 6,
+          "time": 0.21470117568969727,
+          "success": true
+        },
+        {
+          "question": "Объясни протокол передачи данных через спутник",
+          "answer": "Ошибка получения ответа: HTTPConnectionPool(host='localhost', port=11434): Max retries exceeded with url: /api/chat (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7903fedc6890>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+          "sources_count": 6,
+          "time": 0.35547876358032227,
+          "success": true
+        }
+      ]
+    },
+    "llama3:8b": {
+      "model": "llama3:8b",
+      "success_rate": 1.0,
+      "avg_time": 0.16770201921463013,
+      "total_time": 0.6708080768585205,
+      "successful_answers": 4,
+      "total_questions": 4,
+      "results": [
+        {
+          "question": "Что такое SBD пакет в спутниковой связи?",
+          "answer": "Ошибка получения ответа: HTTPConnectionPool(host='localhost', port=11434): Max retries exceeded with url: /api/chat (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x790418091f90>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+          "sources_count": 6,
+          "time": 0.19198226928710938,
+          "success": true
+        },
+        {
+          "question": "Как работает VSAT система?",
+          "answer": "Ошибка получения ответа: HTTPConnectionPool(host='localhost', port=11434): Max retries exceeded with url: /api/chat (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7903df202c80>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+          "sources_count": 6,
+          "time": 0.15755391120910645,
+          "success": true
+        },
+        {
+          "question": "Какие преимущества у спутниковой связи?",
+          "answer": "Ошибка получения ответа: HTTPConnectionPool(host='localhost', port=11434): Max retries exceeded with url: /api/chat (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7903df202050>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+          "sources_count": 6,
+          "time": 0.15973758697509766,
+          "success": true
+        },
+        {
+          "question": "Объясни протокол передачи данных через спутник",
+          "answer": "Ошибка получения ответа: HTTPConnectionPool(host='localhost', port=11434): Max retries exceeded with url: /api/chat (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7903fedc6a70>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+          "sources_count": 6,
+          "time": 0.16153430938720703,
+          "success": true
+        }
+      ]
+    },
+    "llama3.1:8b": {
+      "model": "llama3.1:8b",
+      "success_rate": 1.0,
+      "avg_time": 3.8264479637145996,
+      "total_time": 15.305791854858398,
+      "successful_answers": 4,
+      "total_questions": 4,
+      "results": [
+        {
+          "question": "Что такое SBD пакет в спутниковой связи?",
+          "answer": "Ошибка получения ответа: HTTPConnectionPool(host='localhost', port=11434): Max retries exceeded with url: /api/chat (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7903fedc4460>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+          "sources_count": 6,
+          "time": 0.16437697410583496,
+          "success": true
+        },
+        {
+          "question": "Как работает VSAT система?",
+          "answer": "Ошибка получения ответа: HTTPConnectionPool(host='localhost', port=11434): Max retries exceeded with url: /api/chat (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7903fedc69e0>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+          "sources_count": 6,
+          "time": 0.15637469291687012,
+          "success": true
+        },
+        {
+          "question": "Какие преимущества у спутниковой связи?",
+          "answer": "Ошибка получения ответа: HTTPConnectionPool(host='localhost', port=11434): Max retries exceeded with url: /api/chat (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x790418092890>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+          "sources_count": 6,
+          "time": 0.15788054466247559,
+          "success": true
+        },
+        {
+          "question": "Объясни протокол передачи данных через спутник",
+          "answer": "Ошибка получения ответа: HTTPConnectionPool(host='localhost', port=11434): Max retries exceeded with url: /api/chat (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7903df22f0d0>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+          "sources_count": 7,
+          "time": 14.827159643173218,
+          "success": true
+        }
+      ]
+    }
+  },
+  "sql_assistant_results": {
+    "qwen2.5-coder:7b": {
+      "model": "qwen2.5-coder:7b",
+      "success_rate": 0.0,
+      "avg_time": 0.0,
+      "total_time": 0,
+      "successful_queries": 0,
+      "total_questions": 4,
+      "results": [
+        {
+          "question": "Покажи SBD трафик за май месяц по каждому устройству",
+          "sql_query": "",
+          "sql_length": 0,
+          "time": 0,
+          "success": false,
+          "error": "Request timed out."
+        },
+        {
+          "question": "Сколько потратили на VSAT_DATA в прошлом месяце?",
+          "sql_query": "",
+          "sql_length": 0,
+          "time": 0,
+          "success": false,
+          "error": "Connection error."
+        },
+        {
+          "question": "Какие устройства используют больше всего трафика?",
+          "sql_query": "",
+          "sql_length": 0,
+          "time": 0,
+          "success": false,
+          "error": "Connection error."
+        },
+        {
+          "question": "Покажи статистику по всем сервисам за последние 3 месяца",
+          "sql_query": "",
+          "sql_length": 0,
+          "time": 0,
+          "success": false,
+          "error": "Connection error."
+        }
+      ]
+    },
+    "qwen3:8b": {
+      "model": "qwen3:8b",
+      "success_rate": 0.0,
+      "avg_time": 0.0,
+      "total_time": 0,
+      "successful_queries": 0,
+      "total_questions": 4,
+      "results": [
+        {
+          "question": "Покажи SBD трафик за май месяц по каждому устройству",
+          "sql_query": "",
+          "sql_length": 0,
+          "time": 0,
+          "success": false,
+          "error": "Connection error."
+        },
+        {
+          "question": "Сколько потратили на VSAT_DATA в прошлом месяце?",
+          "sql_query": "",
+          "sql_length": 0,
+          "time": 0,
+          "success": false,
+          "error": "Connection error."
+        },
+        {
+          "question": "Какие устройства используют больше всего трафика?",
+          "sql_query": "",
+          "sql_length": 0,
+          "time": 0,
+          "success": false,
+          "error": "Connection error."
+        },
+        {
+          "question": "Покажи статистику по всем сервисам за последние 3 месяца",
+          "sql_query": "",
+          "sql_length": 0,
+          "time": 0,
+          "success": false,
+          "error": "Connection error."
+        }
+      ]
+    },
+    "llama3:8b": {
+      "model": "llama3:8b",
+      "success_rate": 0.0,
+      "avg_time": 0.0,
+      "total_time": 0,
+      "successful_queries": 0,
+      "total_questions": 4,
+      "results": [
+        {
+          "question": "Покажи SBD трафик за май месяц по каждому устройству",
+          "sql_query": "",
+          "sql_length": 0,
+          "time": 0,
+          "success": false,
+          "error": "Connection error."
+        },
+        {
+          "question": "Сколько потратили на VSAT_DATA в прошлом месяце?",
+          "sql_query": "",
+          "sql_length": 0,
+          "time": 0,
+          "success": false,
+          "error": "Connection error."
+        },
+        {
+          "question": "Какие устройства используют больше всего трафика?",
+          "sql_query": "",
+          "sql_length": 0,
+          "time": 0,
+          "success": false,
+          "error": "Connection error."
+        },
+        {
+          "question": "Покажи статистику по всем сервисам за последние 3 месяца",
+          "sql_query": "",
+          "sql_length": 0,
+          "time": 0,
+          "success": false,
+          "error": "Connection error."
+        }
+      ]
+    },
+    "llama3.1:8b": {
+      "model": "llama3.1:8b",
+      "success_rate": 0.0,
+      "avg_time": 0.0,
+      "total_time": 0,
+      "successful_queries": 0,
+      "total_questions": 4,
+      "results": [
+        {
+          "question": "Покажи SBD трафик за май месяц по каждому устройству",
+          "sql_query": "",
+          "sql_length": 0,
+          "time": 0,
+          "success": false,
+          "error": "Connection error."
+        },
+        {
+          "question": "Сколько потратили на VSAT_DATA в прошлом месяце?",
+          "sql_query": "",
+          "sql_length": 0,
+          "time": 0,
+          "success": false,
+          "error": "Connection error."
+        },
+        {
+          "question": "Какие устройства используют больше всего трафика?",
+          "sql_query": "",
+          "sql_length": 0,
+          "time": 0,
+          "success": false,
+          "error": "Connection error."
+        },
+        {
+          "question": "Покажи статистику по всем сервисам за последние 3 месяца",
+          "sql_query": "",
+          "sql_length": 0,
+          "time": 0,
+          "success": false,
+          "error": "Connection error."
+        }
+      ]
+    }
+  },
+  "smart_librarian_results": {
+    "qwen2.5-coder:7b": {
+      "model": "qwen2.5-coder:7b",
+      "success_rate": 0.0,
+      "avg_time": 0.0,
+      "total_time": 0,
+      "successful_tasks": 0,
+      "total_tasks": 3,
+      "results": [
+        {
+          "task_type": "document_analysis",
+          "content": "Техническая документация по спутниковой связи содержит подробные инструкции по настройке оборудования и протоколы передачи данных.",
+          "question": "Проанализируй этот документ и определи его тип и ключевые темы",
+          "answer": "",
+          "time": 0,
+          "success": false,
+          "error": "HTTPConnectionPool(host='localhost', port=11434): Max retries exceeded with url: /api/chat (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7903df202290>: Failed to establish a new connection: [Errno 111] Connection refused'))"
+        },
+        {
+          "task_type": "content_categorization",
+          "content": "SBD (Short Burst Data) - это технология передачи коротких сообщений через спутниковую сеть с минимальным потреблением энергии.",
+          "question": "К какой категории относится этот контент?",
+          "answer": "",
+          "time": 0,
+          "success": false,
+          "error": "HTTPConnectionPool(host='localhost', port=11434): Max retries exceeded with url: /api/chat (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7903df202230>: Failed to establish a new connection: [Errno 111] Connection refused'))"
+        },
+        {
+          "task_type": "knowledge_extraction",
+          "content": "VSAT система обеспечивает высокоскоростной доступ в интернет через геостационарные спутники с пропускной способностью до 100 Мбит/с.",
+          "question": "Извлеки ключевые технические характеристики из этого текста",
+          "answer": "",
+          "time": 0,
+          "success": false,
+          "error": "HTTPConnectionPool(host='localhost', port=11434): Max retries exceeded with url: /api/chat (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7903df200dc0>: Failed to establish a new connection: [Errno 111] Connection refused'))"
+        }
+      ]
+    },
+    "qwen3:8b": {
+      "model": "qwen3:8b",
+      "success_rate": 0.0,
+      "avg_time": 0.0,
+      "total_time": 0,
+      "successful_tasks": 0,
+      "total_tasks": 3,
+      "results": [
+        {
+          "task_type": "document_analysis",
+          "content": "Техническая документация по спутниковой связи содержит подробные инструкции по настройке оборудования и протоколы передачи данных.",
+          "question": "Проанализируй этот документ и определи его тип и ключевые темы",
+          "answer": "",
+          "time": 0,
+          "success": false,
+          "error": "HTTPConnectionPool(host='localhost', port=11434): Max retries exceeded with url: /api/chat (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7903fedc5cf0>: Failed to establish a new connection: [Errno 111] Connection refused'))"
+        },
+        {
+          "task_type": "content_categorization",
+          "content": "SBD (Short Burst Data) - это технология передачи коротких сообщений через спутниковую сеть с минимальным потреблением энергии.",
+          "question": "К какой категории относится этот контент?",
+          "answer": "",
+          "time": 0,
+          "success": false,
+          "error": "HTTPConnectionPool(host='localhost', port=11434): Max retries exceeded with url: /api/chat (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7903fedf14e0>: Failed to establish a new connection: [Errno 111] Connection refused'))"
+        },
+        {
+          "task_type": "knowledge_extraction",
+          "content": "VSAT система обеспечивает высокоскоростной доступ в интернет через геостационарные спутники с пропускной способностью до 100 Мбит/с.",
+          "question": "Извлеки ключевые технические характеристики из этого текста",
+          "answer": "",
+          "time": 0,
+          "success": false,
+          "error": "HTTPConnectionPool(host='localhost', port=11434): Max retries exceeded with url: /api/chat (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7903fedf22f0>: Failed to establish a new connection: [Errno 111] Connection refused'))"
+        }
+      ]
+    },
+    "llama3:8b": {
+      "model": "llama3:8b",
+      "success_rate": 0.0,
+      "avg_time": 0.0,
+      "total_time": 0,
+      "successful_tasks": 0,
+      "total_tasks": 3,
+      "results": [
+        {
+          "task_type": "document_analysis",
+          "content": "Техническая документация по спутниковой связи содержит подробные инструкции по настройке оборудования и протоколы передачи данных.",
+          "question": "Проанализируй этот документ и определи его тип и ключевые темы",
+          "answer": "",
+          "time": 0,
+          "success": false,
+          "error": "HTTPConnectionPool(host='localhost', port=11434): Max retries exceeded with url: /api/chat (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7903df2006d0>: Failed to establish a new connection: [Errno 111] Connection refused'))"
+        },
+        {
+          "task_type": "content_categorization",
+          "content": "SBD (Short Burst Data) - это технология передачи коротких сообщений через спутниковую сеть с минимальным потреблением энергии.",
+          "question": "К какой категории относится этот контент?",
+          "answer": "",
+          "time": 0,
+          "success": false,
+          "error": "HTTPConnectionPool(host='localhost', port=11434): Max retries exceeded with url: /api/chat (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7903df203250>: Failed to establish a new connection: [Errno 111] Connection refused'))"
+        },
+        {
+          "task_type": "knowledge_extraction",
+          "content": "VSAT система обеспечивает высокоскоростной доступ в интернет через геостационарные спутники с пропускной способностью до 100 Мбит/с.",
+          "question": "Извлеки ключевые технические характеристики из этого текста",
+          "answer": "",
+          "time": 0,
+          "success": false,
+          "error": "HTTPConnectionPool(host='localhost', port=11434): Max retries exceeded with url: /api/chat (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7903df200f70>: Failed to establish a new connection: [Errno 111] Connection refused'))"
+        }
+      ]
+    },
+    "llama3.1:8b": {
+      "model": "llama3.1:8b",
+      "success_rate": 0.0,
+      "avg_time": 0.0,
+      "total_time": 0,
+      "successful_tasks": 0,
+      "total_tasks": 3,
+      "results": [
+        {
+          "task_type": "document_analysis",
+          "content": "Техническая документация по спутниковой связи содержит подробные инструкции по настройке оборудования и протоколы передачи данных.",
+          "question": "Проанализируй этот документ и определи его тип и ключевые темы",
+          "answer": "",
+          "time": 0,
+          "success": false,
+          "error": "HTTPConnectionPool(host='localhost', port=11434): Max retries exceeded with url: /api/chat (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7903df22f220>: Failed to establish a new connection: [Errno 111] Connection refused'))"
+        },
+        {
+          "task_type": "content_categorization",
+          "content": "SBD (Short Burst Data) - это технология передачи коротких сообщений через спутниковую сеть с минимальным потреблением энергии.",
+          "question": "К какой категории относится этот контент?",
+          "answer": "",
+          "time": 0,
+          "success": false,
+          "error": "HTTPConnectionPool(host='localhost', port=11434): Max retries exceeded with url: /api/chat (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7903df22fa30>: Failed to establish a new connection: [Errno 111] Connection refused'))"
+        },
+        {
+          "task_type": "knowledge_extraction",
+          "content": "VSAT система обеспечивает высокоскоростной доступ в интернет через геостационарные спутники с пропускной способностью до 100 Мбит/с.",
+          "question": "Извлеки ключевые технические характеристики из этого текста",
+          "answer": "",
+          "time": 0,
+          "success": false,
+          "error": "HTTPConnectionPool(host='localhost', port=11434): Max retries exceeded with url: /api/chat (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7903df22f6a0>: Failed to establish a new connection: [Errno 111] Connection refused'))"
+        }
+      ]
+    }
+  },
+  "summary": {
+    "best_rag_model": "llama3:8b",
+    "best_sql_model": null,
+    "best_librarian_model": null,
+    "overall_best_model": "qwen2.5-coder:7b",
+    "recommendations": [
+      "🏆 Лучшая общая модель: qwen2.5-coder:7b",
+      "🧠 Лучшая для RAG: llama3:8b"
+    ]
+  }
+}

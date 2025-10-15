@@ -21,7 +21,7 @@ class TransactionManager:
         if db_path is None:
             from pathlib import Path
             current_dir = Path(__file__).parent
-            self.db_path = current_dir.parent.parent.parent / "satellite_billing.db"
+            self.db_path = current_dir.parent.parent / "kbs.db"
         else:
             self.db_path = db_path
         

@@ -13,7 +13,7 @@ def init_kb_database():
     """Инициализация базы данных KB"""
     
     # Путь к общей БД
-    db_path = Path(__file__).parent.parent / "satellite_billing.db"
+    db_path = Path(__file__).parent / "kbs.db"
     
     if not db_path.exists():
         print(f"❌ База данных не найдена: {db_path}")

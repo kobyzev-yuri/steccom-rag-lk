@@ -18,7 +18,13 @@ class VisionProcessor:
         import os
         self.use_gemini = os.getenv("USE_GEMINI", "true").lower() == "true"
         self.proxy_api_key = os.getenv("PROXYAPI_KEY") or os.getenv("PROXYAPI_API_KEY") or os.getenv("OPEN_AI_API_KEY")
-        self.gemini_model = "gemini-2.0-flash"
+        
+        # Используем конфигурацию по умолчанию
+        try:
+            from config.settings import MODEL_DEFAULTS
+            self.gemini_model = os.getenv("STEC_VISION_MODEL", MODEL_DEFAULTS.get("VISION_MODEL", "gemini-2.0-flash"))
+        except ImportError:
+            self.gemini_model = os.getenv("STEC_VISION_MODEL", "gemini-2.0-flash")
     
     def check_model_availability(self) -> Dict[str, Any]:
         """Проверить доступность модели"""
@@ -50,7 +56,7 @@ class VisionProcessor:
             return {'available': False, 'message': f'Ошибка проверки модели: {e}'}
     
     def analyze_image_with_gemini(self, image_path: Path) -> Dict[str, Any]:
-        """Анализ изображения с помощью Google Gemini"""
+        """Анализ изображения с помощью Google Gemini (оптимизировано для больших изображений)"""
         try:
             import requests
             import base64
@@ -59,24 +65,28 @@ class VisionProcessor:
             
             # Проверяем размер изображения
             file_size = image_path.stat().st_size
-            if file_size > 10 * 1024 * 1024:  # 10MB
+            if file_size > 20 * 1024 * 1024:  # Увеличили лимит до 20MB для больших PDF изображений
                 return {
                     'success': False,
                     'error': f'Изображение слишком большое: {file_size / 1024 / 1024:.1f}MB'
                 }
             
-            # Уменьшаем размер изображения для ускорения
+            # Оптимизируем изображение для больших PDF сканов
             try:
                 image = Image.open(image_path)
-                image.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+                
+                # Для больших изображений используем более умное масштабирование
+                max_size = 2048 if file_size > 5 * 1024 * 1024 else 1024  # Больше размер для больших файлов
+                image.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
                 
                 # Конвертируем в RGB если нужно
                 if image.mode != 'RGB':
                     image = image.convert('RGB')
                 
-                # Сохраняем в буфер
+                # Сохраняем в буфер с оптимальным качеством
                 img_buffer = io.BytesIO()
-                image.save(img_buffer, format='JPEG', quality=85)
+                quality = 90 if file_size > 2 * 1024 * 1024 else 85  # Выше качество для больших файлов
+                image.save(img_buffer, format='JPEG', quality=quality)
                 img_data = img_buffer.getvalue()
             except Exception as e:
                 return {
@@ -113,13 +123,23 @@ class VisionProcessor:
             "Content-Type": "application/json"
         }
         
-        # Используем Google Gemini API формат
+        # Используем Google Gemini API формат с улучшенным промптом для больших изображений
         payload = {
             "contents": [
                 {
                     "parts": [
                         {
-                            "text": f"Проанализируй это изображение документа '{image_name}'. Опиши что на нем изображено, какие элементы, текст, структуру. Ответь кратко на русском языке."
+                            "text": f"""Проанализируй это изображение документа '{image_name}' детально. 
+
+Для больших изображений и PDF сканов:
+1. Опиши общую структуру и компоновку
+2. Извлеки весь видимый текст (сохрани форматирование)
+3. Определи тип документа (технический, юридический, инструкция и т.д.)
+4. Выдели ключевые разделы, заголовки, таблицы
+5. Опиши схемы, диаграммы, графики если есть
+6. Укажи важные технические характеристики или данные
+
+Ответь подробно на русском языке, сохраняя структуру документа."""
                         },
                         {
                             "inline_data": {
@@ -132,7 +152,7 @@ class VisionProcessor:
             ],
             "generationConfig": {
                 "temperature": 0.1,
-                "maxOutputTokens": 500
+                "maxOutputTokens": 1500  # Увеличили лимит для больших изображений
             }
         }
         
@@ -159,7 +179,7 @@ class VisionProcessor:
             raise Exception(f'Gemini API error: {response.status_code} - {response.text}')
     
     def extract_text_from_image_gemini(self, image_path: Path) -> str:
-        """Извлечение текста из изображения с помощью Gemini"""
+        """Извлечение текста из изображения с помощью Gemini (оптимизировано для больших изображений)"""
         try:
             import requests
             import base64
@@ -168,21 +188,25 @@ class VisionProcessor:
             
             # Проверяем размер изображения
             file_size = image_path.stat().st_size
-            if file_size > 10 * 1024 * 1024:  # 10MB
+            if file_size > 20 * 1024 * 1024:  # Увеличили лимит до 20MB
                 return f'Изображение слишком большое: {file_size / 1024 / 1024:.1f}MB'
             
-            # Уменьшаем размер изображения для ускорения
+            # Оптимизируем изображение для больших PDF сканов
             try:
                 image = Image.open(image_path)
-                image.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+                
+                # Для больших изображений используем более умное масштабирование
+                max_size = 2048 if file_size > 5 * 1024 * 1024 else 1024
+                image.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
                 
                 # Конвертируем в RGB если нужно
                 if image.mode != 'RGB':
                     image = image.convert('RGB')
                 
-                # Сохраняем в буфер
+                # Сохраняем в буфер с оптимальным качеством
                 img_buffer = io.BytesIO()
-                image.save(img_buffer, format='JPEG', quality=85)
+                quality = 90 if file_size > 2 * 1024 * 1024 else 85
+                image.save(img_buffer, format='JPEG', quality=quality)
                 img_data = img_buffer.getvalue()
             except Exception as e:
                 return f'Ошибка обработки изображения: {e}'
@@ -215,13 +239,23 @@ class VisionProcessor:
             "Content-Type": "application/json"
         }
         
-        # Используем Google Gemini API формат
+        # Используем Google Gemini API формат с улучшенным промптом для больших изображений
         payload = {
             "contents": [
                 {
                     "parts": [
                         {
-                            "text": "Извлеки весь текст с этого изображения. Сохрани структуру и форматирование. Если текст неразборчив, укажи это."
+                            "text": """Извлеки весь текст с этого изображения максимально точно. 
+
+Для больших изображений и PDF сканов:
+1. Сохрани структуру документа (заголовки, абзацы, списки)
+2. Извлеки текст из таблиц, сохраняя форматирование
+3. Обрати внимание на мелкий текст и подписи
+4. Если есть схемы или диаграммы, опиши их содержимое
+5. Сохрани нумерацию и маркировку
+6. Если текст неразборчив, укажи это, но попробуй расшифровать
+
+Выдай результат в том же порядке, что и в документе."""
                         },
                         {
                             "inline_data": {
@@ -234,7 +268,7 @@ class VisionProcessor:
             ],
             "generationConfig": {
                 "temperature": 0.1,
-                "maxOutputTokens": 1000
+                "maxOutputTokens": 2000  # Увеличили лимит для больших изображений
             }
         }
         

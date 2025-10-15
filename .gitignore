@@ -56,3 +56,4 @@ dist/
 
 # MediaWiki runtime DBs
 mediawiki_db/*.sqlite
+\n# Archive and generated\narchive/\n\n# Venv\n.venv/\n\n# Runtime pids\n*.pid\n.api_deps_installed\n.streamlit_deps_installed\nkb_admin/.kb_deps_installed\n\n# Logs\nlogs/\nai_billing/logs/\nkb_admin/logs/\n\n# Databases\n*.sqlite\n*.db\nmediawiki_db/\n

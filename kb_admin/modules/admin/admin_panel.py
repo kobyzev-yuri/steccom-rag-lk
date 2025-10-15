@@ -575,7 +575,7 @@ class AdminPanel:
         # Token usage dashboard
         st.subheader("📊 Потребление токенов")
         try:
-            conn = sqlite3.connect("satellite_billing.db")
+            conn = sqlite3.connect("kbs.db")
             c = conn.cursor()
             # Ensure table exists (in case first run without RAG calls)
             c.execute("""

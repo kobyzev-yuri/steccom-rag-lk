@@ -221,6 +221,32 @@ class SmartLibrarian(BaseAgent):
                     agent_keywords = self._last_parsed_result.get('keywords', [])
                     if agent_keywords:
                         analysis['keywords'] = agent_keywords
+        elif analysis['file_extension'] in ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp']:
+            # Анализируем отдельные изображения через VisionProcessor
+            try:
+                logger = logging.getLogger(__name__)
+                logger.info(f"🔍 Анализируем изображение {file_path.name} через VisionProcessor")
+                
+                # Используем VisionProcessor для анализа изображения
+                vision_result = self.vision_processor.analyze_image_with_gemini(file_path)
+                
+                if vision_result.get('success', False):
+                    analysis['gemini_analysis'] = vision_result.get('analysis', '')
+                    analysis['full_cleaned_text'] = analysis['gemini_analysis']
+                    analysis['images'] = [{'analysis': analysis['gemini_analysis']}]
+                    analysis['image_count'] = 1
+                    logger.info(f"✅ Успешно проанализировано изображение {file_path.name}")
+                else:
+                    logger.error(f"❌ Ошибка анализа изображения: {vision_result.get('error', 'Неизвестная ошибка')}")
+                    analysis['images'] = []
+                    analysis['image_count'] = 0
+                    analysis['gemini_analysis'] = None
+            except Exception as e:
+                logger = logging.getLogger(__name__)
+                logger.error(f"❌ Ошибка при анализе изображения {file_path.name}: {e}")
+                analysis['images'] = []
+                analysis['image_count'] = 0
+                analysis['gemini_analysis'] = None
         elif analysis['file_extension'] in ['.docx', '.doc']:
             image_analyses = self.analyze_docx_images(file_path)
             analysis['images'] = image_analyses
@@ -275,12 +301,29 @@ class SmartLibrarian(BaseAgent):
             doc_summary = analysis.get('smart_summary', '')
             doc_category = analysis.get('category', 'Неизвестно')
             doc_title = analysis.get('file_name', 'Документ')
+            file_extension = analysis.get('file_extension', '')
             
             # Логируем размер документа
             logger.info(f"Размер документа для анализа: {len(doc_content)} символов")
             
-            # Используем локальную модель через self.chat_model
-            logger.info("Используем локальную модель для генерации тестовых вопросов")
+            # Проверяем, является ли документ изображением
+            if file_extension in ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp']:
+                # Для изображений используем анализ от VisionProcessor
+                gemini_analysis = analysis.get('gemini_analysis', '')
+                if gemini_analysis:
+                    doc_content = gemini_analysis
+                    logger.info(f"🔍 Используем анализ изображения от Gemini: {len(doc_content)} символов")
+                else:
+                    logger.warning("⚠️ Нет анализа изображения от Gemini, пропускаем генерацию вопросов")
+                    return []
+            
+            # Если нет контента для анализа, пропускаем генерацию вопросов
+            if not doc_content or len(doc_content.strip()) < 10:
+                logger.warning("⚠️ Недостаточно контента для генерации вопросов")
+                return []
+            
+            # Используем ProxyAPI через self.chat_model
+            logger.info("Используем ProxyAPI для генерации тестовых вопросов")
             logger.info(f"🔍 DEBUG: Размер документа: {len(doc_content)} символов")
             logger.info(f"🔍 DEBUG: Название документа: {doc_title}")
             logger.info(f"🔍 DEBUG: Категория документа: {doc_category}")
@@ -902,38 +945,44 @@ class SmartLibrarian(BaseAgent):
         }
     
     def _extract_text_content(self, file_path: Path) -> str:
-        """Извлечение текста из документа с поддержкой OCR"""
+        """Извлечение текста из документа с поддержкой Gemini OCR"""
         try:
             if file_path.suffix.lower() == '.pdf':
                 # Сначала пробуем обычное извлечение
                 text = self.pdf_processor.extract_text(str(file_path))
                 
-                # Если текста мало, пробуем OCR
+                # Если текста мало, используем Gemini для анализа изображений в PDF
                 if len(text.strip()) < 100:
                     try:
-                        from modules.documents.ocr_processor import OCRProcessor
-                        ocr_processor = OCRProcessor()
-                        ocr_result = ocr_processor.process_document(str(file_path))
-                        if ocr_result['success'] and ocr_result.get('text_content'):
-                            text = ocr_result['text_content']
-                            st.info(f"🔍 Использован OCR для {file_path.name}")
-                    except Exception as ocr_e:
-                        st.warning(f"OCR недоступен: {ocr_e}")
+                        # Анализируем изображения в PDF через Gemini
+                        image_analyses = self.analyze_document_images(file_path)
+                        if image_analyses:
+                            # Собираем текст из анализа изображений
+                            gemini_texts = []
+                            for img_analysis in image_analyses:
+                                if 'analysis' in img_analysis and img_analysis['analysis']:
+                                    gemini_texts.append(img_analysis['analysis'])
+                            
+                            if gemini_texts:
+                                text = "\n\n".join(gemini_texts)
+                                st.info(f"🔍 Использован Gemini для анализа {file_path.name}")
+                    except Exception as gemini_e:
+                        st.warning(f"Gemini недоступен: {gemini_e}")
                 
                 return text
                 
             elif file_path.suffix.lower() in ['.png', '.jpg', '.jpeg', '.tiff', '.bmp']:
-                # Для изображений используем OCR
+                # Для изображений используем Gemini
                 try:
-                    from modules.documents.ocr_processor import OCRProcessor
-                    ocr_processor = OCRProcessor()
-                    ocr_result = ocr_processor.process_document(str(file_path))
-                    if ocr_result['success'] and ocr_result.get('text_content'):
-                        return ocr_result['text_content']
+                    from modules.documents.vision_processor import VisionProcessor
+                    vision_processor = VisionProcessor()
+                    gemini_text = vision_processor.extract_text_from_image_gemini(file_path)
+                    if gemini_text and gemini_text != "Gemini не настроен для извлечения текста":
+                        return gemini_text
                     else:
                         return ""
-                except Exception as ocr_e:
-                    st.warning(f"OCR недоступен для {file_path.name}: {ocr_e}")
+                except Exception as gemini_e:
+                    st.warning(f"Gemini недоступен для {file_path.name}: {gemini_e}")
                     return ""
                     
             elif file_path.suffix.lower() in ['.docx', '.doc']:

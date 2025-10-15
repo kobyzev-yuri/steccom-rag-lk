@@ -1,4 +1,4 @@
-И"""
+"""
 Configuration settings for KB Admin
 Настройки конфигурации для системы управления базами знаний
 """
@@ -67,7 +67,7 @@ if not _FORCE_LOCAL_DIRS:
 # ----------------------------
 # Database (shared with AI billing)
 # ----------------------------
-DATABASE_PATH = BASE_DIR.parent / "satellite_billing.db"
+DATABASE_PATH = BASE_DIR / "kbs.db"
 
 # ----------------------------
 # RAG settings (existing)
@@ -105,6 +105,24 @@ MODEL_CONFIGS = {
         "max_tokens": 1000,
         "cost_per_1k_input": 0.0,
         "cost_per_1k_output": 0.0
+    },
+    "gemini-2.0-flash": {
+        "provider": "proxyapi",
+        "temperature": 0.1,
+        "max_tokens": 2000,
+        "cost_per_1k_input": 0.0,
+        "cost_per_1k_output": 0.0,
+        "vision_capable": True,
+        "ocr_capable": True
+    },
+    "gemini-1.5-pro": {
+        "provider": "proxyapi",
+        "temperature": 0.1,
+        "max_tokens": 4000,
+        "cost_per_1k_input": 0.0,
+        "cost_per_1k_output": 0.0,
+        "vision_capable": True,
+        "ocr_capable": True
     }
 }
 
@@ -114,6 +132,8 @@ MODEL_CONFIGS = {
 MODEL_DEFAULTS = {
     "VISION_MODEL": os.getenv("STEC_VISION_MODEL", "gemini-2.0-flash"),
     "CHAT_MODEL": os.getenv("STEC_CHAT_MODEL", "qwen3:8b"),
+    "OCR_MODEL": os.getenv("STEC_OCR_MODEL", "gemini-2.0-flash"),
+    "DOCUMENT_ANALYSIS_MODEL": os.getenv("STEC_DOCUMENT_ANALYSIS_MODEL", "gemini-1.5-pro"),
 }
 
 # ----------------------------

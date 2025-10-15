@@ -1,0 +1,231 @@
+{
+  "protocol_info": {
+    "created_at": "2025-09-25T20:51:44.433214",
+    "total_tests": 3,
+    "test_environment": {
+      "python_version": "3.x",
+      "test_framework": "pytest",
+      "rag_system": "MultiKBRAG",
+      "knowledge_bases": [
+        "legacy_reglament_sbd.json"
+      ],
+      "test_date": "2025-09-25T20:51:44.400604",
+      "test_location": "/mnt/ai/cnn/steccom/tests/"
+    }
+  },
+  "test_entries": [
+    {
+      "test_id": "test_001_205144",
+      "question": {
+        "question_id": "sbd_001",
+        "question_text": "Какие ограничения по размеру сообщений действуют для абонентских терминалов в услуге SBD?",
+        "expected_keywords": [
+          "340/1960 байт",
+          "270/1890 байт",
+          "зависимости от типа терминала",
+          "абонентский терминал"
+        ],
+        "category": "technical_limits",
+        "kb_source": "legacy_reglament_sbd.json",
+        "difficulty_level": "medium",
+        "expected_answer_type": "factual"
+      },
+      "model_response": {
+        "model_name": "gpt-4o",
+        "provider": "proxyapi",
+        "response_text": "Согласно регламенту SBD, исходящие электронные сообщения с абонентского терминала не должны превышать 340/1960 байт, а входящие сообщения - не более 270/1890 байт в зависимости от типа используемого абонентского терминала.",
+        "response_time": 2.1,
+        "sources_found": 1,
+        "sources_details": [
+          {
+            "source": "legacy_reglament_sbd.json",
+            "relevance": 0.8
+          }
+        ],
+        "timestamp": "2025-09-25T20:51:44.400685",
+        "input_tokens": 22,
+        "output_tokens": 55,
+        "total_tokens": 77,
+        "tokens_per_second": 26.19,
+        "cost_per_token": 8e-06,
+        "estimated_cost": 0.000605
+      },
+      "relevance_assessment": {
+        "accuracy_score": 0.9,
+        "completeness_score": 0.85,
+        "relevance_score": 0.9,
+        "keywords_found": [
+          "340/1960 байт",
+          "270/1890 байт"
+        ],
+        "keywords_missing": [
+          "зависимости от типа терминала",
+          "абонентский терминал"
+        ],
+        "overall_quality": "excellent",
+        "human_notes": "Демонстрационный сценарий: GPT-4o (быстрый и точный)",
+        "efficiency_score": 0.4206,
+        "cost_effectiveness": 1460.0551
+      },
+      "test_timestamp": "2025-09-25T20:51:44.424967",
+      "test_environment": {
+        "python_version": "3.x",
+        "test_framework": "pytest",
+        "rag_system": "MultiKBRAG",
+        "knowledge_bases": [
+          "legacy_reglament_sbd.json"
+        ],
+        "test_date": "2025-09-25T20:51:44.400604",
+        "test_location": "/mnt/ai/cnn/steccom/tests/"
+      }
+    },
+    {
+      "test_id": "test_002_205144",
+      "question": {
+        "question_id": "sbd_001",
+        "question_text": "Какие ограничения по размеру сообщений действуют для абонентских терминалов в услуге SBD?",
+        "expected_keywords": [
+          "340/1960 байт",
+          "270/1890 байт",
+          "зависимости от типа терминала",
+          "абонентский терминал"
+        ],
+        "category": "technical_limits",
+        "kb_source": "legacy_reglament_sbd.json",
+        "difficulty_level": "medium",
+        "expected_answer_type": "factual"
+      },
+      "model_response": {
+        "model_name": "qwen2.5:1.5b",
+        "provider": "ollama",
+        "response_text": "В услуге SBD есть ограничения по размеру сообщений. Исходящие сообщения не должны превышать определенный размер, а входящие также имеют ограничения.",
+        "response_time": 8.5,
+        "sources_found": 1,
+        "sources_details": [
+          {
+            "source": "legacy_reglament_sbd.json",
+            "relevance": 0.8
+          }
+        ],
+        "timestamp": "2025-09-25T20:51:44.425036",
+        "input_tokens": 22,
+        "output_tokens": 37,
+        "total_tokens": 59,
+        "tokens_per_second": 4.35,
+        "cost_per_token": 0.0,
+        "estimated_cost": 0.0
+      },
+      "relevance_assessment": {
+        "accuracy_score": 0.7,
+        "completeness_score": 0.6,
+        "relevance_score": 0.75,
+        "keywords_found": [],
+        "keywords_missing": [
+          "340/1960 байт",
+          "270/1890 байт",
+          "зависимости от типа терминала",
+          "абонентский терминал"
+        ],
+        "overall_quality": "good",
+        "human_notes": "Демонстрационный сценарий: Qwen (медленный но бесплатный)",
+        "efficiency_score": 0.0804,
+        "cost_effectiveness": Infinity
+      },
+      "test_timestamp": "2025-09-25T20:51:44.432939",
+      "test_environment": {
+        "python_version": "3.x",
+        "test_framework": "pytest",
+        "rag_system": "MultiKBRAG",
+        "knowledge_bases": [
+          "legacy_reglament_sbd.json"
+        ],
+        "test_date": "2025-09-25T20:51:44.400604",
+        "test_location": "/mnt/ai/cnn/steccom/tests/"
+      }
+    },
+    {
+      "test_id": "test_003_205144",
+      "question": {
+        "question_id": "sbd_001",
+        "question_text": "Какие ограничения по размеру сообщений действуют для абонентских терминалов в услуге SBD?",
+        "expected_keywords": [
+          "340/1960 байт",
+          "270/1890 байт",
+          "зависимости от типа терминала",
+          "абонентский терминал"
+        ],
+        "category": "technical_limits",
+        "kb_source": "legacy_reglament_sbd.json",
+        "difficulty_level": "medium",
+        "expected_answer_type": "factual"
+      },
+      "model_response": {
+        "model_name": "gpt-3.5-turbo",
+        "provider": "proxyapi",
+        "response_text": "Для услуги SBD установлены ограничения по размеру сообщений: исходящие до 340/1960 байт, входящие до 270/1890 байт в зависимости от типа терминала.",
+        "response_time": 1.8,
+        "sources_found": 1,
+        "sources_details": [
+          {
+            "source": "legacy_reglament_sbd.json",
+            "relevance": 0.8
+          }
+        ],
+        "timestamp": "2025-09-25T20:51:44.433049",
+        "input_tokens": 22,
+        "output_tokens": 36,
+        "total_tokens": 58,
+        "tokens_per_second": 20.0,
+        "cost_per_token": 2e-06,
+        "estimated_cost": 9.4e-05
+      },
+      "relevance_assessment": {
+        "accuracy_score": 0.75,
+        "completeness_score": 0.7,
+        "relevance_score": 0.8,
+        "keywords_found": [
+          "340/1960 байт",
+          "270/1890 байт",
+          "зависимости от типа терминала"
+        ],
+        "keywords_missing": [
+          "абонентский терминал"
+        ],
+        "overall_quality": "good",
+        "human_notes": "Демонстрационный сценарий: GPT-3.5 (компромисс)",
+        "efficiency_score": 0.4167,
+        "cost_effectiveness": 7978.7234
+      },
+      "test_timestamp": "2025-09-25T20:51:44.433180",
+      "test_environment": {
+        "python_version": "3.x",
+        "test_framework": "pytest",
+        "rag_system": "MultiKBRAG",
+        "knowledge_bases": [
+          "legacy_reglament_sbd.json"
+        ],
+        "test_date": "2025-09-25T20:51:44.400604",
+        "test_location": "/mnt/ai/cnn/steccom/tests/"
+      }
+    }
+  ],
+  "summary_statistics": {
+    "total_tests": 3,
+    "average_accuracy": 0.783,
+    "average_completeness": 0.717,
+    "average_relevance": 0.817,
+    "average_response_time": 4.13,
+    "average_tokens_per_second": 16.85,
+    "average_total_tokens": 65.0,
+    "total_estimated_cost": 0.000699,
+    "average_efficiency_score": 0.3059,
+    "average_cost_effectiveness": Infinity,
+    "quality_distribution": {
+      "excellent": 1,
+      "good": 2
+    },
+    "category_distribution": {
+      "technical_limits": 3
+    }
+  }
+}

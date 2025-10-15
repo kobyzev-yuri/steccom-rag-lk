@@ -200,7 +200,7 @@ class KBWorkflow:
         # Check database
         try:
             import sqlite3
-            conn = sqlite3.connect('satellite_billing.db')
+            conn = sqlite3.connect('kbs.db')
             c = conn.cursor()
             
             # KB count
@@ -237,7 +237,7 @@ class KBWorkflow:
         
         try:
             import sqlite3
-            conn = sqlite3.connect('satellite_billing.db')
+            conn = sqlite3.connect('kbs.db')
             c = conn.cursor()
             
             c.execute("""

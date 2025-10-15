@@ -55,26 +55,12 @@ class AgentModelManager:
             with col2:
                 st.info(f"**Текущая модель:** {current_config.get('model', 'Неизвестно')}")
         
-        # Выбор провайдера (по умолчанию текущий)
-        providers = ["ollama", "proxyapi", "openai"]
-        current_provider = (current_config or {}).get('provider', 'ollama')
-        try:
-            provider_index = providers.index(current_provider)
-        except ValueError:
-            provider_index = 0
-        provider = st.selectbox(
-            "Провайдер чата", 
-            providers, 
-            index=provider_index, 
-            key=f"{key_prefix}_provider"
-        )
+        # Только ProxyAPI поддерживается
+        provider = "proxyapi"
+        st.info("🤖 Используется ProxyAPI с Gemini")
         
-        if provider == "ollama":
-            self._render_ollama_config(agent_instance, key_prefix)
-        elif provider == "proxyapi":
-            self._render_proxyapi_config(agent_instance, key_prefix)
-        elif provider == "openai":
-            self._render_openai_config(agent_instance, key_prefix)
+        # Только ProxyAPI поддерживается
+        self._render_proxyapi_config(agent_instance, key_prefix)
     
     def _render_ollama_config(self, agent_instance, key_prefix: str):
         """Конфигурация Ollama"""
@@ -112,12 +98,12 @@ class AgentModelManager:
         with col1:
             base_url = st.text_input(
                 "Base URL", 
-                value=os.getenv("PROXYAPI_BASE_URL", "https://api.proxyapi.ru/openai/v1"), 
+                value=os.getenv("PROXYAPI_BASE_URL", "https://api.proxyapi.ru/google/v1"), 
                 key=f"{key_prefix}_proxyapi_base"
             )
             model = st.text_input(
                 "Модель", 
-                value=os.getenv("PROXYAPI_CHAT_MODEL", "gpt-4o"), 
+                value=os.getenv("PROXYAPI_CHAT_MODEL", "gemini-1.5-pro"), 
                 key=f"{key_prefix}_proxyapi_model"
             )
         

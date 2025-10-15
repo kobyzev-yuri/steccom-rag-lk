@@ -12,16 +12,16 @@ import plotly.express as px
 
 # Optional RAG helper import for admin actions
 try:
-    from ..rag.rag_helper import RAGHelper
+    from modules.rag.rag_helper import RAGHelper
     _RAG_AVAILABLE = True
 except Exception:
     _RAG_AVAILABLE = False
 
-from ..core.database import execute_standard_query, execute_query
-from ..core.rag import generate_sql
-from ..core.utils import display_query_results
-from ..core.charts import create_chart
-from ..core.queries import STANDARD_QUERIES, QUICK_QUESTIONS
+from modules.core.database import execute_standard_query, execute_query
+from modules.core.rag import generate_sql
+from modules.core.utils import display_query_results
+from modules.core.charts import create_chart
+from modules.core.queries import STANDARD_QUERIES, QUICK_QUESTIONS
 
 
 def render_user_view():
@@ -68,7 +68,7 @@ def render_standard_reports(company_override: Optional[str] = None):
     if st.session_state.is_staff:
         try:
             companies_query = "SELECT DISTINCT company FROM users WHERE role = 'user' ORDER BY company"
-            conn = sqlite3.connect('satellite_billing.db')
+            conn = sqlite3.connect('kbs.db')
             _df_companies = pd.read_sql_query(companies_query, conn)
             conn.close()
             company_options = ["All Companies"] + _df_companies['company'].tolist()
@@ -539,7 +539,7 @@ def render_staff_view():
                 model = st.text_input("OLLAMA_CHAT_MODEL", value=os.getenv("OLLAMA_CHAT_MODEL", "qwen2.5:1.5b"), key="ollama_model")
                 if st.button("Применить", key="apply_ollama_model"):
                     try:
-                        from ..rag.multi_kb_rag import MultiKBRAG
+                        from modules.rag.multi_kb_rag import MultiKBRAG
                         if st.session_state.get('multi_rag'):
                             st.session_state.multi_rag.set_chat_backend("ollama", model)
                             st.success("Применено: Ollama → " + model)
@@ -656,7 +656,7 @@ def render_staff_view():
     with tab_wiki:
         st.subheader("MediaWiki Integration")
         try:
-            from ..integrations import MediaWikiClient, KBToWikiPublisher
+            from modules.integrations import MediaWikiClient, KBToWikiPublisher
             st.markdown("### Настройки подключения")
             wiki_url = st.text_input("URL MediaWiki", value="http://localhost:8080/api.php", key="wiki_url_legacy")
             wiki_username = st.text_input("Имя пользователя", key="wiki_username_legacy")
@@ -960,7 +960,7 @@ def render_staff_view():
         st.markdown("---")
         st.subheader("MediaWiki Integration")
         try:
-            from ..integrations import MediaWikiClient, KBToWikiPublisher
+            from modules.integrations import MediaWikiClient, KBToWikiPublisher
             
             # Настройки MediaWiki
             st.markdown("### Настройки подключения")

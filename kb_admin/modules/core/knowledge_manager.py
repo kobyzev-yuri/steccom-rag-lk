@@ -17,7 +17,7 @@ class KnowledgeBaseManager:
         if db_path is None:
             # Используем абсолютный путь к общей БД
             current_dir = Path(__file__).parent
-            self.db_path = current_dir.parent.parent.parent / "satellite_billing.db"
+            self.db_path = current_dir.parent.parent / "kbs.db"
         else:
             self.db_path = db_path
         self.init_knowledge_tables()

@@ -11,18 +11,15 @@ from pathlib import Path
 from typing import Dict, Any, List
 
 # Добавляем путь к модулям KB Admin и корневым модулям
-sys.path.append(str(Path(__file__).parent.parent))
-sys.path.append(str(Path(__file__).parent.parent.parent))
+current_dir = Path(__file__).parent
+sys.path.insert(0, str(current_dir))
+sys.path.insert(0, str(current_dir.parent))
+sys.path.insert(0, str(current_dir.parent.parent))
 
+# Импорты модулей KB Admin
 from modules.core.knowledge_manager import KnowledgeBaseManager
 from modules.core.text_analyzer import TextAnalyzer
 from modules.core.chunk_optimizer import ChunkOptimizer
-
-# Импорты из корневых модулей
-import os
-root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
-sys.path.insert(0, root_path)
-
 from modules.rag.multi_kb_rag import MultiKBRAG
 from modules.documents.pdf_processor import PDFProcessor
 from modules.testing.kb_test_protocol import KBTestProtocol
@@ -92,8 +89,8 @@ class KBAdminInterface:
             page_options = [
                 "📊 Обзор системы",
                 "📚 Умный библиотекарь",
-                "🔧 Админ-панель (AI Billing)",
-                "📚 Управление KB",
+                "📤 Загрузка документов",
+                "💬 Чат с RAG",
                 "📤 Публикация в Wiki",
                 "🤖 Управление моделями",
                 "⚙️ Настройки"
@@ -179,13 +176,12 @@ class KBAdminInterface:
             self._render_overview()
         elif page == "📚 Умный библиотекарь":
             self._render_smart_librarian()
-        elif page == "🔧 Админ-панель (AI Billing)":
-            self._render_admin_panel()
-        elif page == "📚 Управление KB":
-            self._render_kb_management()
+        elif page == "📤 Загрузка документов":
+            self._render_document_upload()
+        elif page == "💬 Чат с RAG":
+            self._render_rag_chat()
         elif page == "📤 Публикация в Wiki":
             self._render_mediawiki_publishing()
-        # Создание/расширение БЗ теперь входит в поток "Умный библиотекарь"
         elif page == "⚙️ Настройки":
             self._render_settings()
         elif page == "🤖 Управление моделями":
@@ -361,15 +357,70 @@ class KBAdminInterface:
             st.error(f"Ошибка загрузки списка KB: {e}")
     
     def _render_document_upload(self):
-        """Рендер загрузки документов"""
-        st.header("📄 Загрузка документов")
-        st.info("Загрузите PDF документы для создания или расширения базы знаний")
+        """Рендер страницы загрузки документов"""
+        st.header("📤 Загрузка документов")
+        st.markdown("Загрузите документы для обработки и добавления в базы знаний")
         
-        # Используем функционал из админ-панели
-        if hasattr(self.admin_panel, 'render_document_upload'):
-            self.admin_panel.render_document_upload()
+        # Показываем существующие файлы в uploads
+        uploads_dir = Path("data/uploads")
+        if uploads_dir.exists():
+            uploaded_files = list(uploads_dir.glob("*.pdf"))
+            if uploaded_files:
+                st.subheader("📁 Существующие файлы в uploads:")
+                for file in uploaded_files:
+                    col1, col2, col3 = st.columns([3, 1, 1])
+                    with col1:
+                        st.write(f"📄 {file.name}")
+                    with col2:
+                        if st.button("🗑️", key=f"delete_{file.name}", help="Удалить файл"):
+                            file.unlink()
+                            st.rerun()
+                    with col3:
+                        if st.button("📚", key=f"process_{file.name}", help="Обработать файл"):
+                            st.info("Функция обработки будет добавлена")
+            else:
+                st.info("📁 В папке uploads нет PDF файлов")
         else:
-            st.error("Функционал загрузки документов недоступен")
+            st.info("📁 Папка uploads не существует")
+        
+        st.markdown("---")
+        
+        # Загрузка новых файлов
+        st.subheader("📤 Загрузить новые документы")
+        uploaded_files = st.file_uploader(
+            "Выберите PDF файлы для загрузки",
+            type=['pdf'],
+            accept_multiple_files=True,
+            help="Выберите один или несколько PDF файлов"
+        )
+        
+        if uploaded_files:
+            if st.button("💾 Сохранить файлы"):
+                uploads_dir.mkdir(parents=True, exist_ok=True)
+                saved_count = 0
+                
+                for uploaded_file in uploaded_files:
+                    try:
+                        file_path = uploads_dir / uploaded_file.name
+                        with open(file_path, "wb") as f:
+                            f.write(uploaded_file.getbuffer())
+                        saved_count += 1
+                        st.success(f"✅ Сохранен: {uploaded_file.name}")
+                    except Exception as e:
+                        st.error(f"❌ Ошибка сохранения {uploaded_file.name}: {e}")
+                
+                if saved_count > 0:
+                    st.success(f"🎉 Успешно сохранено {saved_count} файлов!")
+                    st.rerun()
+        
+        # Показываем кнопку перегенерации вопросов, если есть сгенерированные вопросы
+        if 'generated_test_questions' in st.session_state and st.session_state.generated_test_questions:
+            st.markdown("---")
+            st.subheader("🧪 Тестовые вопросы")
+            st.info("✅ Тестовые вопросы сгенерированы и будут использованы после создания БЗ")
+            if st.button("🔄 Перегенерировать вопросы", key="regenerate_test_questions"):
+                st.session_state.generated_test_questions = None
+                st.rerun()
     
     def _render_text_analysis(self):
         """Рендер анализа текста"""
@@ -383,7 +434,7 @@ class KBAdminInterface:
     
     def _render_relevance_testing(self):
         """Рендер тестирования релевантности"""
-        from .testing_interface import TestingInterface
+        from modules.ui.testing_interface import TestingInterface
         testing_interface = TestingInterface()
         testing_interface.render_testing_interface()
     
@@ -2044,12 +2095,10 @@ class KBAdminInterface:
         # Конфигурация агентов
         st.subheader("🔧 Конфигурация агентов")
         
-        # Собираем всех агентов
+        # Собираем только агентов, которые используют LLM
         agents = {
             "Smart Librarian": self.smart_librarian,
             "RAG System": self.rag,
-            "Text Analyzer": self.text_analyzer,
-            "Chunk Optimizer": self.chunk_optimizer,
         }
         
         # Создаем вкладки для каждого агента
@@ -2682,3 +2731,106 @@ class KBAdminInterface:
                 st.error(f"❌ Критическая ошибка при сохранении в KB: {e}")
                 st.error(f"⚠️ Ошибка отката транзакции: {rollback_error}")
                 st.error("🚨 Требуется ручная проверка состояния системы!")
+    
+    def _render_rag_chat(self):
+        """Рендер чата с RAG по существующим БЗ"""
+        st.header("💬 Чат с RAG")
+        st.markdown("Задавайте вопросы по существующим базам знаний")
+        
+        # Показываем доступные БЗ
+        try:
+            available_kbs = self.rag.get_available_kbs()
+            if available_kbs:
+                st.subheader("📚 Доступные базы знаний:")
+                # Проверяем тип возвращаемых данных
+                if isinstance(available_kbs, dict):
+                    for kb_id, kb_info in available_kbs.items():
+                        st.write(f"• **{kb_info.get('name', f'KB {kb_id}')}** (ID: {kb_id})")
+                        st.write(f"  - Документов: {kb_info.get('document_count', 0)}")
+                        st.write(f"  - Чанков: {kb_info.get('chunk_count', 0)}")
+                elif isinstance(available_kbs, list):
+                    for kb_info in available_kbs:
+                        kb_id = kb_info.get('id', 'Unknown')
+                        st.write(f"• **{kb_info.get('name', f'KB {kb_id}')}** (ID: {kb_id})")
+                        st.write(f"  - Документов: {kb_info.get('document_count', 0)}")
+                        st.write(f"  - Чанков: {kb_info.get('chunk_count', 0)}")
+                else:
+                    st.write(f"📚 Найдено БЗ: {len(available_kbs) if hasattr(available_kbs, '__len__') else 'Неизвестно'}")
+            else:
+                st.warning("📚 Нет доступных баз знаний")
+        except Exception as e:
+            st.error(f"❌ Ошибка загрузки БЗ: {e}")
+            st.write("🔍 Попробуем получить информацию другим способом...")
+            try:
+                # Альтернативный способ получения информации о БЗ
+                kb_count = len(self.rag.vectorstores) if hasattr(self.rag, 'vectorstores') else 0
+                st.info(f"📚 Найдено векторных индексов: {kb_count}")
+            except:
+                st.info("📚 Информация о БЗ недоступна")
+        
+        st.markdown("---")
+        
+        # Чат интерфейс
+        st.subheader("💬 Задайте вопрос")
+        
+        # Инициализируем историю чата
+        if 'chat_history' not in st.session_state:
+            st.session_state.chat_history = []
+        
+        # Показываем историю чата
+        if st.session_state.chat_history:
+            st.subheader("📝 История чата")
+            for i, (question, answer) in enumerate(st.session_state.chat_history):
+                with st.expander(f"❓ {question[:50]}..." if len(question) > 50 else f"❓ {question}"):
+                    st.write(f"**Вопрос:** {question}")
+                    st.write(f"**Ответ:** {answer}")
+        
+        # Поле для ввода вопроса
+        user_question = st.text_area(
+            "Введите ваш вопрос:",
+            placeholder="Например: Какие документы есть в базе знаний?",
+            height=100
+        )
+        
+        col1, col2 = st.columns([1, 4])
+        with col1:
+            ask_button = st.button("🤖 Задать вопрос", type="primary")
+        with col2:
+            if st.button("🗑️ Очистить историю"):
+                st.session_state.chat_history = []
+                st.rerun()
+        
+        if ask_button and user_question:
+            with st.spinner("🤔 Ищу ответ..."):
+                try:
+                    # Получаем ответ от RAG системы
+                    response = self.rag.get_response_with_context(
+                        user_question, 
+                        context_limit=5
+                    )
+                    
+                    if response:
+                        # Добавляем в историю
+                        st.session_state.chat_history.append((user_question, response))
+                        
+                        # Показываем ответ
+                        st.success("✅ Ответ получен!")
+                        st.markdown("### 🤖 Ответ:")
+                        st.write(response)
+                        
+                        # Показываем источники, если есть
+                        try:
+                            sources = self.rag.get_sources_for_last_query()
+                            if sources:
+                                st.markdown("### 📚 Источники:")
+                                for source in sources:
+                                    st.write(f"• {source}")
+                        except:
+                            pass
+                    else:
+                        st.warning("⚠️ Не удалось найти ответ в базах знаний")
+                        st.session_state.chat_history.append((user_question, "Ответ не найден"))
+                        
+                except Exception as e:
+                    st.error(f"❌ Ошибка при получении ответа: {e}")
+                    st.session_state.chat_history.append((user_question, f"Ошибка: {e}"))

@@ -11,8 +11,8 @@ from typing import List, Dict, Any
 import json
 from datetime import datetime
 
-from ..testing.relevance_analyzer import RelevanceAnalyzer, RelevanceTestResult
-from ..core.knowledge_manager import KnowledgeBaseManager
+from modules.testing.relevance_analyzer import RelevanceAnalyzer, RelevanceTestResult
+from modules.core.knowledge_manager import KnowledgeBaseManager
 
 
 class TestingInterface:

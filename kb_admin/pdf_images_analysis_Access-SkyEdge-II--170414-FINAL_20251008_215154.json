@@ -1,0 +1,86 @@
+{
+  "summary": {
+    "test_date": "2025-10-08T21:51:54.701152",
+    "total_images": 2,
+    "llava_metrics": {
+      "successful_analyses": 0,
+      "success_rate": 0.0,
+      "avg_response_time": 0,
+      "total_time": 0
+    },
+    "gemini_metrics": {
+      "successful_analyses": 0,
+      "success_rate": 0.0,
+      "avg_response_time": 0,
+      "total_time": 0
+    },
+    "comparison": {
+      "llava_better_success": false,
+      "gemini_better_success": false,
+      "llava_faster": false,
+      "gemini_faster": false
+    },
+    "recommendations": [
+      "Проверьте настройки обеих систем"
+    ]
+  },
+  "detailed_results": [
+    {
+      "image_path": "/mnt/ai/cnn/steccom-rag-lk/kb_admin/extracted_images/Access-SkyEdge-II--170414-FINAL/page_1_img_1.png",
+      "image_name": "page_1_img_1.png",
+      "image_size": 6131817,
+      "llava_result": {
+        "success": false,
+        "analysis": "",
+        "description": "",
+        "full_response": "",
+        "error": "Ошибка анализа Ollama: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=60)",
+        "response_time": 60.13278579711914,
+        "model": "",
+        "provider": ""
+      },
+      "gemini_result": {
+        "success": false,
+        "error": "'VisionProcessor' object has no attribute 'analyze_image_with_gemini'",
+        "response_time": 0
+      },
+      "comparison": {
+        "both_successful": false,
+        "llava_faster": false,
+        "speed_difference": 60.13278579711914,
+        "quality_metrics": {}
+      }
+    },
+    {
+      "image_path": "/mnt/ai/cnn/steccom-rag-lk/kb_admin/extracted_images/Access-SkyEdge-II--170414-FINAL/page_1_img_2.png",
+      "image_name": "page_1_img_2.png",
+      "image_size": 764299,
+      "llava_result": {
+        "success": false,
+        "analysis": "",
+        "description": "",
+        "full_response": "",
+        "error": "Ошибка анализа Ollama: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=60)",
+        "response_time": 60.07760810852051,
+        "model": "",
+        "provider": ""
+      },
+      "gemini_result": {
+        "success": false,
+        "error": "'VisionProcessor' object has no attribute 'analyze_image_with_gemini'",
+        "response_time": 0
+      },
+      "comparison": {
+        "both_successful": false,
+        "llava_faster": false,
+        "speed_difference": 60.07760810852051,
+        "quality_metrics": {}
+      }
+    }
+  ],
+  "pdf_info": {
+    "name": "Access-SkyEdge-II--170414-FINAL.pdf",
+    "size": 1461754,
+    "path": "/mnt/ai/cnn/steccom-rag-lk/data/uploads/Access-SkyEdge-II--170414-FINAL.pdf"
+  }
+}

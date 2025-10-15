@@ -15,7 +15,7 @@ from pathlib import Path
 def get_db_path():
     """Get the path to the satellite billing database"""
     current_dir = Path(__file__).parent
-    return current_dir.parent.parent.parent / "satellite_billing.db"
+    return current_dir.parent.parent / "kbs.db"
 
 
 def init_db():

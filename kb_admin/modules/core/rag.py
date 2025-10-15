@@ -9,8 +9,12 @@ from openai import OpenAI
 from .database import get_database_schema
 from pathlib import Path
 
-# Initialize OpenAI client
-client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
+# Initialize OpenAI client with ProxyAPI
+import os
+client = OpenAI(
+    base_url=os.getenv("PROXYAPI_BASE_URL", "https://api.proxyapi.ru/openai/v1"),
+    api_key=os.getenv("PROXYAPI_API_KEY", "")
+)
 
 
 def generate_sql(question: str, company: Optional[str] = None) -> str:

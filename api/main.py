@@ -10,7 +10,8 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import sqlite3
 import pandas as pd
-import jwt
+from jose import jwt
+from jose.exceptions import JWTError
 from datetime import datetime, timedelta
 import os
 from pathlib import Path
@@ -172,7 +173,7 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
                 headers={"WWW-Authenticate": "Bearer"},
             )
         return payload
-    except jwt.PyJWTError:
+    except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials",

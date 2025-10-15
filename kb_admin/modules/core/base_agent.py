@@ -18,9 +18,10 @@ class BaseAgent:
     def __init__(self, agent_name: str, model_type: str = "chat"):
         self.agent_name = agent_name
         self.model_type = model_type
-        self.model_name = "qwen3:8b"  # Дефолтная модель для KB Admin
-        self.ollama_base_url = "http://localhost:11434"
-        self.db_path = "satellite_billing.db"  # Путь к БД KB Admin
+        # Используем только ProxyAPI с Gemini
+        import os
+        self.model_name = os.getenv("PROXYAPI_CHAT_MODEL", "gemini-1.5-pro")
+        self.db_path = "kbs.db"  # Путь к БД KB Admin
         
         # Инициализируем chat модель
         self._init_chat_model()
@@ -28,55 +29,43 @@ class BaseAgent:
         # Инициализируем таблицу учета токенов
         self._ensure_usage_table()
         
-        logger.info(f"Инициализирован агент {agent_name} с моделью {self.model_name}")
+        # Логируем с информацией о провайдере
+        provider_info = f"с моделью {self.model_name}"
+        if hasattr(self, '_chat_backend'):
+            provider = self._chat_backend.get('provider', 'unknown')
+            provider_info = f"с {provider} моделью {self.model_name}"
+        logger.info(f"Инициализирован агент {agent_name} {provider_info}")
     
     def _init_chat_model(self):
-        """Инициализация chat модели"""
+        """Инициализация chat модели - только ProxyAPI с Gemini"""
         try:
-            from langchain_community.chat_models import ChatOllama
             from langchain_openai import ChatOpenAI
             import os
             
-            # Проверяем, какой провайдер использовать
-            use_proxy = os.getenv("USE_PROXYAPI", "false").lower() == "true"
+            # Используем только ProxyAPI с Gemini
+            api_key = os.getenv("PROXYAPI_KEY") or os.getenv("PROXYAPI_API_KEY") or os.getenv("OPEN_AI_API_KEY")
+            # Для текстовых запросов через ChatOpenAI используем /openai/v1 endpoint
+            base_url = os.getenv("PROXYAPI_BASE_URL", "https://api.proxyapi.ru/openai/v1")
+            model = os.getenv("PROXYAPI_CHAT_MODEL", "gpt-4o")
             
-            if use_proxy:
-                # Используем ProxyAPI
-                api_key = os.getenv("PROXYAPI_KEY") or os.getenv("PROXYAPI_API_KEY") or os.getenv("OPEN_AI_API_KEY")
-                base_url = os.getenv("PROXYAPI_BASE_URL", "https://api.proxyapi.ru/openai/v1")
-                model = os.getenv("PROXYAPI_CHAT_MODEL", "gpt-4o")
-                
-                if api_key:
-                    self.chat_model = ChatOpenAI(
-                        model=model,
-                        openai_api_key=api_key,
-                        base_url=base_url,
-                        temperature=0.2
-                    )
-                    self._chat_backend = {
-                        'provider': 'proxyapi', 
-                        'model': model,
-                        'base_url': base_url
-                    }
-                else:
-                    # Fallback to Ollama
-                    self.chat_model = ChatOllama(model=self.model_name, timeout=10)
-                    self._chat_backend = {'provider': 'ollama', 'model': self.model_name}
+            if api_key:
+                self.chat_model = ChatOpenAI(
+                    model=model,
+                    openai_api_key=api_key,
+                    base_url=base_url,
+                    temperature=0.2
+                )
+                self._chat_backend = {
+                    'provider': 'proxyapi', 
+                    'model': model,
+                    'base_url': base_url
+                }
             else:
-                # Используем Ollama по умолчанию
-                self.chat_model = ChatOllama(model=self.model_name, timeout=10)
-                self._chat_backend = {'provider': 'ollama', 'model': self.model_name}
+                raise Exception("ProxyAPI ключ не найден. Установите PROXYAPI_KEY в config.env")
                 
         except Exception as e:
-            logger.error(f"Ошибка инициализации chat модели: {e}")
-            # Fallback к простой модели
-            try:
-                from langchain_community.chat_models import ChatOllama
-                self.chat_model = ChatOllama(model=self.model_name, timeout=10)
-                self._chat_backend = {'provider': 'ollama', 'model': self.model_name}
-            except Exception:
-                self.chat_model = None
-                self._chat_backend = {'provider': 'none', 'model': 'none'}
+            logger.error(f"Ошибка инициализации ProxyAPI: {e}")
+            raise Exception(f"Не удалось инициализировать ProxyAPI: {e}")
     
     def set_chat_backend(self, provider: str, model: str, base_url: str = None, 
                         api_key: str = None, temperature: float = 0.2):

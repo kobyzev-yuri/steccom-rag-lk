@@ -8,7 +8,7 @@ kb_admin_dir = Path(__file__).parents[2]
 if str(kb_admin_dir) not in sys.path:
     sys.path.append(str(kb_admin_dir))
 
-from config.settings import SETTINGS
+from kb_admin.config.settings import SETTINGS
 
 def render_settings_page():
     st.header("⚙️ Настройки системы")
